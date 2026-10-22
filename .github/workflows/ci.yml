@@ -1,0 +1,66 @@
+name: CI / Build & Regression Tests
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-verify:
+    name: Build Binaries & Run 347 Assertions
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure Desktop Display Resolution (1920x1080)
+        shell: powershell
+        run: |
+          try {
+              Set-DisplayResolution -Width 1920 -Height 1080 -Force
+              Start-Sleep -Seconds 2
+          } catch {
+              Write-Warning "Set-DisplayResolution unavailable or failed: $_"
+          }
+
+      - name: Inspect System Disks & Resolution
+        shell: powershell
+        run: |
+          Get-Disk | Format-Table Number, FriendlyName, OperationalStatus, TotalSize -AutoSize
+          Get-Partition | Format-Table DiskNumber, PartitionNumber, DriveLetter, Type -AutoSize
+          Add-Type -AssemblyName System.Windows.Forms
+          $screen = [System.Windows.Forms.Screen]::PrimaryScreen
+          Write-Host "Desktop Resolution: $($screen.Bounds.Width)x$($screen.Bounds.Height), WorkingArea: $($screen.WorkingArea.Width)x$($screen.WorkingArea.Height)"
+
+      - name: Verify .NET Framework Compiler
+        shell: powershell
+        run: |
+          $cscPath = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+          if (-not (Test-Path $cscPath)) {
+              throw "csc.exe not found at $cscPath"
+          }
+          Write-Host "Using C# Compiler: $cscPath"
+
+      - name: Build Core Executable & Test Runner
+        shell: cmd
+        run: build.bat
+
+      - name: Build Native Installer
+        shell: cmd
+        run: Installer\build_installer.bat
+
+      - name: Execute Full Regression Test Suite (27 Suites / 347 Assertions)
+        shell: powershell
+        run: |
+          .\TestRunner.exe --test-harness
+          if ($LASTEXITCODE -ne 0) {
+              throw "Regression test harness failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Compute and Display Build Hashes
+        shell: powershell
+        run: |
+          Get-FileHash UsbShieldPro.exe, TestRunner.exe, release\USB-Shield-Pro-v2.1.0-Setup.exe -Algorithm SHA256 | Format-Table -AutoSize

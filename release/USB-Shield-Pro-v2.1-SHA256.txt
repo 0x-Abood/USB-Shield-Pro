@@ -1,0 +1,49 @@
+================================================================================
+  USB Shield Pro v2.1.0 -- Final Clean-Room Release Checksum Verification
+================================================================================
+
+1. CORE RELEASE EXECUTABLE:
+File:            UsbShieldPro.exe
+Path:            release\USB-Shield-Pro-v2.1\UsbShieldPro.exe
+Size:            1,060,864 bytes
+SHA-256:         4F9A904E9AB5236C18D298DD78443D5021DB5781BFCF16C0C037100DFEC5AFA9
+Build Timestamp: 2026-10-22 20:47:00 UTC+03:00
+Target Platform: Windows 10 / Windows 11 x64 (.NET Framework 4.8)
+Manifest:        requireAdministrator
+Subsystem:       Windows GUI (WinExe -- production mode, no test harness, /debug-)
+
+2. CONFIGURATION & DOCUMENTATION:
+File:            UsbShieldPro.exe.config
+Path:            release\USB-Shield-Pro-v2.1\UsbShieldPro.exe.config
+Size:            598 bytes
+SHA-256:         53840DABDB7510AC21965024AEC4797025C920C965D29BBAA46FFA324338C5B1
+Purpose:         High-DPI PerMonitorV2 awareness and runtime switch configuration
+
+File:            README.txt
+Path:            release\USB-Shield-Pro-v2.1\README.txt
+Size:            6,998 bytes
+SHA-256:         3B72B744C64DF260E54BBC5AE5B0888C9F742C320DB3C62C9D26D5CBC1DAEA4F
+Purpose:         Production release documentation, architecture notes, and CLI reference
+
+3. OFFICIAL DISTRIBUTION PACKAGES:
+File:            USB-Shield-Pro-v2.1.0-Portable.zip
+Path:            release\USB-Shield-Pro-v2.1.0-Portable.zip
+Size:            383,102 bytes
+SHA-256:         64C525CE05419592516EAE76FAA8A680DF14D024D6B05BEBCB4BF2300B0102AD
+Purpose:         Zero-installation portable distribution containing UsbShieldPro.exe, config, and README
+
+File:            USB-Shield-Pro-v2.1.0-Setup.exe
+Path:            release\USB-Shield-Pro-v2.1.0-Setup.exe
+Size:            1,237,504 bytes
+SHA-256:         A8E0DB5305CD3099D0F0580B5EB5A97E54CE7352E108C199B6532CF85A203CDC
+Purpose:         Self-contained native Windows installer with bilingual Arabic RTL/English UI, shortcut creation, and Programs & Features registration
+
+--------------------------------------------------------------------------------
+STANDARD CHECKSUM FORMAT (sha256sum compatible):
+--------------------------------------------------------------------------------
+4f9a904e9ab5236c18d298dd78443d5021db5781bfcf16c0c037100dfec5afa9  UsbShieldPro.exe
+53840dabdb7510ac21965024aec4797025c920c965d29bbaa46ffa324338c5b1  UsbShieldPro.exe.config
+3b72b744c64df260e54bbc5ae5b0888c9f742c320db3c62c9d26d5cbc1daea4f  README.txt
+64c525ce05419592516eae76faa8a680df14d024d6b05bebcb4bf2300b0102ad  USB-Shield-Pro-v2.1.0-Portable.zip
+a8e0db5305cd3099d0f0580b5eb5a97e54ce7352e108c199b6532cf85a203cdc  USB-Shield-Pro-v2.1.0-Setup.exe
+================================================================================
