@@ -1,0 +1,47 @@
+# ====================================================================
+# USB Shield Pro - Clean-Room Git Ignore Configuration
+# ====================================================================
+
+# Build Outputs & Intermediates (Root)
+bin/
+obj/
+temp/
+/*.exe
+/*.dll
+/*.pdb
+/*.sys
+/*.obj
+/*.exe.config
+
+# Debug Symbols & Crash Dumps
+*.pdb
+*.dmp
+*.mdmp
+
+# Logs, Diagnostics & Local Telemetry
+*.log
+*.tmp
+*.dat
+*.csv
+query
+.usbshield_cfg
+/screen_*.png
+/Screenshots/
+
+# Scratches, Probes & Audit Staging
+/scratch/
+/audit/
+/.agents/
+
+# IDE & Development Metadata
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# OS & Host Metadata
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
