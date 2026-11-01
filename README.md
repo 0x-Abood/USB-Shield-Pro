@@ -28,7 +28,10 @@
 
 **USB Shield Pro** is an open-source, production-ready Windows USB storage control utility engineered for Windows 10 and 11 workstations, labs, and administrative environments. It provides dedicated **USB Mass Storage & WPD/MTP Endpoint Control** to protect systems against unauthorized USB storage peripherals, data exfiltration, and automated drive-by payloads.
 
-Operating through system registry policy and `USBSTOR` driver-state control alongside the native Plug-and-Play (PnP) subsystem, USB Shield Pro allows system administrators to enforce strict default-deny policies on removable storage interfaces while permitting approved hardware via hardware identifier allowlisting (`VID`/`PID`/`Serial`).
+USB Shield Pro operates through two distinct, complementary enforcement models:
+
+1. **System-Wide Lockdown (Pre-Mount Block):** Proactive, global pre-mount restriction that disables USB storage enumeration entirely at the driver layer (`USBSTOR\Start = 4`) and enforces Windows Group Policy boundaries (`RemovableStorageDevices\Deny_All`), blocking all removable storage devices machine-wide without allowlist exceptions.
+2. **Reactive Allowlist Enforcement (Detect-and-Eject):** Real-time hardware identity verification (`VID`/`PID`/`Serial`) managed by the autonomous `UsbShieldService` daemon (`Start = 3`). Approved peripherals remain mounted, while unapproved devices are immediately isolated and ejected via synchronized multi-partition dismounting upon connection.
 
 ---
 
@@ -46,15 +49,19 @@ Operating through system registry policy and `USBSTOR` driver-state control alon
 - **Lockdown Modes vs. Allowlist Enforcement Mode:** System-wide blocking policies (`USBSTOR\Start = 4` or `RemovableStorageDevices\Deny_All`) enforce a global, blanket restriction across the entire workstation without device-level exceptions. Conversely, **Allowlist Enforcement Mode** operates when storage drivers remain interactive (`Start = 3`): the background daemon monitors bus arrivals, verifies hardware identities (`VID`/`PID`/`Serial`), permits trusted hardware to stay mounted, and programmatically ejects untrusted devices immediately upon connection.
 - **Reactive Ejection & The Enumeration Window:** In interactive Allowlist Enforcement Mode, an untrusted peripheral undergoes a brief hardware enumeration window at the Windows PnP subsystem layer before `UsbShieldService` captures the arrival event, validates identity, and triggers isolation. This window is defensively mitigated by:
   1. Completely disabling AutoRun/AutoPlay (`NoDriveTypeAutoRun = 0xFF`) to prevent automatic code execution upon arrival.
-  2. Programmatically locking the volume (`FSCTL_LOCK_VOLUME`) prior to dismounting, severing file access handles and preventing running applications from reading or executing files from the drive during the ejection sequence.
+  2. Sequential Volume Lock and Forceful Dismount Fallback: The ejection engine first attempts an exclusive volume lock via `FSCTL_LOCK_VOLUME` (with up to 3 consecutive retries). If locking fails due to open handles from active background processes (such as Windows Search indexing or antivirus scanning), the engine deterministically falls back to `FSCTL_DISMOUNT_VOLUME`, which forcefully invalidates and severs all open file handles before invoking `IOCTL_STORAGE_EJECT_MEDIA` and `CM_Request_Device_EjectW`, ensuring running applications cannot read or access files during device teardown.
 - **Administrative & State Cryptography:** Cryptographic algorithms are strictly dedicated to administrative authentication, state integrity, and disaster recovery: master passwords are keyed using PBKDF2 with HMAC-SHA256, local configuration data is encrypted with Windows DPAPI, and offline emergency recovery utilizes 128-bit cryptographic key representations.
 
 ### Known Limitations & Out-of-Scope Vectors
 - **User-Mode Architecture:** USB Shield Pro operates as a user-mode Windows service (`UsbShieldService`) and registry/PnP policy coordinator, **not** as a kernel-mode filesystem minifilter driver.
+- **Mount-Time Filesystem Parsing:** In reactive allowlist mode, Windows briefly mounts and parses filesystem headers and metadata (directory structures, volume labels, indexing caches) before reactive ejection completes. While this mode reliably prevents file copying, persistent execution, and data exfiltration, it does not defend against transient kernel-level filesystem driver parsing vulnerabilities triggered instantaneously upon mount.
+- **UASP Fixed-Disk Enclosures:** Certain high-speed USB 3.x and external NVMe enclosures report to Windows as "Fixed Disks" (Basic Disks) rather than "Removable Media". These enclosures can bypass registry-based `RemovableStorageDevices` policies and rely strictly on `UsbShieldService`'s devnode detection and reactive dismount/ejection engine.
+- **Blank or Non-Unique Hardware Serial Numbers:** Low-cost, counterfeit, or promotional USB flash drives occasionally possess blank or duplicate factory serial numbers. USB Shield Pro handles these by combining `VID` + `PID` + hardware instance profile; however, separate drives from the exact same manufacturing batch sharing identical hardware strings cannot be distinguished at the bus query layer.
 - **Tamper Resistance & Local Administrator Boundary:** Administrative password protection (`PBKDF2 + DPAPI`) and registry ACL restrictions protect against standard, unprivileged users (`Standard Users`) and unauthorized modifications in unlocked console sessions. However, within the Windows security architecture, any user with elevated local administrator privileges (`Local Administrator / SYSTEM`) possesses the inherent architectural authority to terminate services, modify registry permissions, or bypass user-mode controls.
 - **Enterprise Policy Coexistence (Active Directory GPO / Microsoft Intune):** USB Shield Pro configures and manages Local Machine Policies (`HKLM`). In managed enterprise domains, centralized Domain Group Policies (GPO) or Microsoft Intune profiles configured to enforce conflicting storage policies may overwrite local registry settings during periodic background policy refresh cycles (`gpupdate /force`).
 - **Human Interface Devices (HID / BadUSB Injections):** Malicious hardware implants that present themselves as keyboard or mouse controllers (such as Rubber Ducky or BadUSB microcontrollers) load HID drivers rather than `USBSTOR` and are strictly outside the operational scope of storage controllers. Mitigating rogue HID devices requires physical USB port locks or bus-level device class filters.
 - **Hardware Identifier Spoofing:** Allowlisting is based on vendor-reported hardware descriptors (`VID`, `PID`, and serial number). Hardware microcontrollers specifically programmed to duplicate the exact descriptors and serial string of an enrolled drive cannot be distinguished at the user-mode bus query layer without hardware-level cryptographic attestation.
+- **Automated CI Test Harness Scope:** The automated CI test suite running on GitHub Actions (27 suites / 347 assertions) validates rules engine logic, atomic registry transaction safety, state journal rollback consistency, installer packaging, and Disk 0 safety invariants programmatically (Unit & Integration Logic). It does not emulate physical USB hardware bus signaling on virtualized cloud runner instances.
 
 ---
 
@@ -91,34 +98,43 @@ Operating through system registry policy and `USBSTOR` driver-state control alon
 
 ```mermaid
 flowchart TD
-    A["USB Storage Connected"] --> B["PnP Subsystem Event (WM_DEVICECHANGE)"]
-    B --> C["Hardware Identity Resolver (VID / PID / Serial)"]
-    C --> D{"Hardware Whitelist Evaluation"}
-    D -- "Trusted (Allowlisted)" --> E["Permit Full Read / Write Access"]
-    D -- "Untrusted / Blocked" --> F{"Enforcement Mode"}
-    F -- "Storage Lockdown" --> G["Group Policy RemovableStorageDevices Deny"]
-    F -- "Driver Hard Block" --> H["USBSTOR Driver Enumeration Disabled (Start=4)"]
-    F -- "Reactive Ejection" --> I["Atomic Multi-Volume Safe Dismount"]
-    I --> J["Native CM_Request_Device_EjectW"]
-    J --> K["Device Safely Ejected Until Removal"]
+    subgraph ModeA ["Mode A: System-Wide Lockdown (Pre-Mount Block)"]
+        A1["USB Storage Connected"] --> A2{"Driver / Policy State"}
+        A2 -- "USBSTOR Start = 4" --> A3["Driver Enumeration Disabled at Kernel Layer"]
+        A2 -- "RemovableStorage Deny_All" --> A4["Windows Group Policy Blocks All Storage Access"]
+        A3 --> A5["All Devices Blocked Without Allowlist Evaluation"]
+        A4 --> A5
+    end
+
+    subgraph ModeB ["Mode B: Reactive Allowlist Mode (Detect & Eject - Start=3)"]
+        B1["USB Storage Connected"] --> B2["PnP Subsystem Event (WM_DEVICECHANGE)"]
+        B2 --> B3{"System Safety Floor Guard"}
+        B3 -- "System Disk / Disk 0 / Boot" --> B4["Hard Floor Pass: Protected Machine Volume"]
+        B3 -- "Removable / External Peripheral" --> B5["Hardware Identity Resolver (VID / PID / Serial)"]
+        B5 --> B6{"RuleEngine Allowlist Match"}
+        B6 -- "Trusted (Allowlisted)" --> B7["Permit Read / Write File Access"]
+        B6 -- "Untrusted (Non-Allowlisted)" --> B8["Sequential Volume Lock & Dismount (FSCTL)"]
+        B8 --> B9["Native CM_Request_Device_EjectW"]
+        B9 --> B10["Device Safely Ejected Until Re-plugged"]
+    end
 ```
 
 ---
 
 ## Core Security Capabilities
 
-| Capability | Mechanism | Security Value |
-| :--- | :--- | :--- |
-| **Driver Hard Lock** | `USBSTOR\Start = 4` | Disables USB storage enumeration at the driver layer. |
-| **Removable Storage Deny** | `RemovableStorageDevices\Deny_All` | Enforces Windows Group Policy to block unauthorized read/write access. |
-| **Write Protection Mode** | `StorageDevicePolicies\WriteProtect = 1` | Permits read-only inspection while blocking malware infection and data theft. |
-| **Portable Device Guard (WPD)** | `WPD Devices\Deny_Read / Deny_Write` | Closes MTP/PTP file transfer channels used by smartphones and media players. |
-| **PnP Installation Control** | `DeviceInstall\Restrictions\DenyRemovableDevices` | Prevents staging and installation of removable storage device drivers. |
-| **AutoPlay Neutralization** | `NoDriveTypeAutoRun = 0xFF` | Disables AutoRun / AutoPlay execution across all removable media. |
-| **Multi-Partition Safe Eject** | `FSCTL_LOCK` &rarr; `FSCTL_DISMOUNT` &rarr; `CM_Request_Device_EjectW` | Synchronously unmounts all dependent volumes, preventing data corruption. |
-| **Autonomous System Service** | Native Win32 `advapi32.dll` | Proactive background monitoring independent of logged-in user sessions. |
-| **Fail-Closed System Floor** | Disk 0 / OS Root / Paging Guard | Prevents accidental ejection of system disks and host OS boot partitions. |
-| **Cryptographic Protection** | PBKDF2 (HMAC-SHA256) + DPAPI | Guards administrative UI authentication, policy modifications, and 128-bit master recovery keys. |
+| Capability | Mechanism | Covers UASP (`uaspstor.sys`)? | Allows Trusted Drives? | Security Value |
+| :--- | :--- | :--- | :--- | :--- |
+| **Driver Hard Lock** | `USBSTOR\Start = 4` | **No** *(usbstor.sys only)* | **No** *(blocks all USBSTOR)* | Disables USB storage enumeration at the driver layer machine-wide. |
+| **Removable Storage Deny** | `RemovableStorageDevices\Deny_All` | **Partial** *(covers removable UASP; fixed enclosures require service eject)* | **No** *(blocks all removable)* | Enforces Windows Group Policy to block read/write access to removable drives. |
+| **Reactive Allowlist Service** | Native Win32 Service (`UsbShieldService`) | **Yes** *(volume & devnode eject)* | **Yes** *(VID/PID/Serial match)* | Proactive real-time background monitoring, allowlist enforcement, and instant safe ejection. |
+| **Write Protection Mode** | `StorageDevicePolicies\WriteProtect = 1` | **Yes** *(via storage policy)* | **No** *(enforces read-only globally)* | Permits read-only inspection while blocking malware infection and data exfiltration. |
+| **Portable Device Guard (WPD)** | `WPD Devices\Deny_Read / Deny_Write` | **N/A** *(covers MTP/PTP)* | **No** *(blocks all WPD media)* | Closes secondary file transfer channels used by smartphones and media players. |
+| **PnP Installation Control** | `DeviceInstall\Restrictions\DenyRemovableDevices` | **Partial** *(removable storage)* | **No** *(blocks driver staging)* | Prevents staging and installation of removable storage device drivers. |
+| **AutoPlay Neutralization** | `NoDriveTypeAutoRun = 0xFF` | **Yes** *(all media types)* | **N/A** *(system-wide policy)* | Disables AutoRun / AutoPlay execution across all removable media. |
+| **Multi-Partition Safe Eject** | `FSCTL_LOCK` &rarr; `FSCTL_DISMOUNT` &rarr; `CM_Request_Device_EjectW` | **Yes** *(targets all volume devnodes)* | **Yes** *(executes on untrusted)* | Synchronously unmounts all dependent volumes, preventing data corruption. |
+| **Fail-Closed System Floor** | Disk 0 / OS Root / Paging Guard | **Yes** *(hard floor check)* | **Yes** *(mandatory pass)* | Prevents accidental ejection of system disks and host OS boot partitions. |
+| **Cryptographic Protection** | PBKDF2 (HMAC-SHA256) + DPAPI | **N/A** *(state security)* | **N/A** *(administrative auth)* | Guards administrative UI authentication, policy modifications, and 128-bit master recovery keys. |
 
 ---
 
