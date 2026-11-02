@@ -9,7 +9,7 @@ on:
 
 jobs:
   build-and-verify:
-    name: Build Binaries & Run 347 Assertions
+    name: Build Binaries & Run 353 Assertions
     runs-on: windows-latest
 
     steps:
@@ -52,7 +52,7 @@ jobs:
         shell: cmd
         run: Installer\build_installer.bat
 
-      - name: Execute Full Regression Test Suite (27 Suites / 347 Assertions)
+      - name: Execute Full Regression Test Suite (28 Suites / 353 Assertions)
         shell: powershell
         run: |
           .\TestRunner.exe --test-harness
