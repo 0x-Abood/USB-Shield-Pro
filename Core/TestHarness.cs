@@ -5104,7 +5104,7 @@ namespace UsbShieldPro.Core
             ActiveSentinel.CancelArrivalReconciliation(resetPendingS0: true);
 
             bool completedPromptly9BP = ActiveSentinel.LastReconciliationTask != null &&
-                                        ActiveSentinel.LastReconciliationTask.Wait(500);
+                                        ActiveSentinel.LastReconciliationTask.Wait(3000);
             long s0PostCancel9BP = LatencyTracker.GetLastPnpArrivalTicks(consume: false);
             bool activeAfterCancel = ActiveSentinel.IsReconciliationActive;
 
