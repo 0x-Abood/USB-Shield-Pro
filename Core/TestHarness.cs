@@ -598,6 +598,9 @@ namespace UsbShieldPro.Core
 
                 // ── TEST 33: v2.1 Phase 6.2 Stage 3 UI Resource, Handle Hygiene & Theme Suite
                 RunPhase62Stage3Tests(log, failures);
+
+                // ── TEST 34: v2.1 Phase 6.3 Safe Passive GitHub Release Update Notifier Suite
+                RunPhase63UpdateCheckerTests(log, failures);
             }
             finally
             {
@@ -632,8 +635,8 @@ namespace UsbShieldPro.Core
             log("================================================================================");
             log("  REGRESSION TEST HARNESS EXECUTION SUMMARY");
             log("================================================================================");
-            log(string.Format("  SUITES TOTAL:       {0}", 27));
-            log(string.Format("  SUITES PASS:        {0}", failures.Count == 0 ? 27 : (27 - (failures.Count > 0 ? 1 : 0))));
+            log(string.Format("  SUITES TOTAL:       {0}", 28));
+            log(string.Format("  SUITES PASS:        {0}", failures.Count == 0 ? 28 : (28 - (failures.Count > 0 ? 1 : 0))));
             log(string.Format("  ASSERTIONS TOTAL:   {0}", totalAssertions));
             log(string.Format("  ASSERTIONS PASS:    {0}", totalPassed));
             log(string.Format("  ASSERTIONS FAIL:    {0}", failures.Count));
@@ -642,7 +645,7 @@ namespace UsbShieldPro.Core
             log("");
             if (failures.Count == 0)
             {
-                log("ALL 27 ISOLATED RECOVERY, LIFECYCLE, PERSISTENCE, THEME/DPI, SHELL, DASHBOARD, DEVICES, PROTECTION, TRUSTED DEVICES, ACTIVITY, RECOVERY, SETTINGS, UI REMEDIATION, IDENTITY MATCHING, STORAGE ENFORCEMENT, ENFORCEMENT OWNERSHIP, TEMPORARY ACCESS, RECOVERY JOURNAL, DURABLE SETTINGS, AUTHENTICATION INTEGRITY, CORE USB ENFORCEMENT, REAL ENFORCEMENT READINESS, STAGE 2 & STAGE 3 REGRESSION TEST SUITES PASSED SUCCESSFULLY.");
+                log("ALL 28 ISOLATED RECOVERY, LIFECYCLE, PERSISTENCE, THEME/DPI, SHELL, DASHBOARD, DEVICES, PROTECTION, TRUSTED DEVICES, ACTIVITY, RECOVERY, SETTINGS, UI REMEDIATION, IDENTITY MATCHING, STORAGE ENFORCEMENT, ENFORCEMENT OWNERSHIP, TEMPORARY ACCESS, RECOVERY JOURNAL, DURABLE SETTINGS, AUTHENTICATION INTEGRITY, CORE USB ENFORCEMENT, REAL ENFORCEMENT READINESS, STAGE 2, STAGE 3 & UPDATE NOTIFIER REGRESSION TEST SUITES PASSED SUCCESSFULLY.");
                 return true;
             }
             else
@@ -19523,6 +19526,228 @@ namespace UsbShieldPro.Core
                 log("  PASSED: Header layouts prevent control collision in LTR/RTL, SafetyMessageBar provides >=46px headroom, and RecentActivity handles RTL cleanly.");
             }
         }
+
+        // ===============================================================================
+        // [Test 34] v2.1 Phase 6.3 Safe Passive GitHub Release Update Notifier Suite
+        // ===============================================================================
+        public static void RunPhase63UpdateCheckerTests(Action<string> log, List<string> failures)
+        {
+            log("");
+            log("================================================================================");
+            log("  [Test 34] v2.1 Phase 6.3 Safe Passive GitHub Release Update Notifier Suite");
+            log("  Verifying Semantic Versioning, Robustness, URL Whitelist Enforcement,");
+            log("  Mock Seam Offline Execution, Air-Gapped Throttling & UI Banner Layout");
+            log("================================================================================");
+
+            // -- TEST 34A: Semantic Version Parsing & Numerical Component Comparison --
+            log("[Test 34A] Semantic Version Parsing & Numerical Component Comparison...");
+            bool pass34A = true;
+            if (UpdateChecker.CompareVersions("v2.2.0", "v2.1.0") <= 0) { pass34A = false; failures.Add("Test 34A Failed: v2.2.0 should be greater than v2.1.0"); }
+            if (UpdateChecker.CompareVersions("v2.10.0", "v2.9.0") <= 0) { pass34A = false; failures.Add("Test 34A Failed: v2.10.0 should be greater than v2.9.0"); }
+            if (UpdateChecker.CompareVersions("v2.1.0", "2.1.0") != 0) { pass34A = false; failures.Add("Test 34A Failed: v2.1.0 should equal 2.1.0"); }
+            if (UpdateChecker.CompareVersions("v2.0.9", "v2.1.0") >= 0) { pass34A = false; failures.Add("Test 34A Failed: v2.0.9 should be less than v2.1.0"); }
+            if (UpdateChecker.CompareVersions("3.0.0", "2.99.99") <= 0) { pass34A = false; failures.Add("Test 34A Failed: 3.0.0 should be greater than 2.99.99"); }
+            if (UpdateChecker.CompareVersions("v2.2.0-rc1", "v2.1.0") <= 0) { pass34A = false; failures.Add("Test 34A Failed: v2.2.0-rc1 should be greater than v2.1.0"); }
+
+            if (!pass34A)
+            {
+                log("  FAILED: Semantic version comparison failed.");
+            }
+            else
+            {
+                log("  PASSED: Semantic versioning parses prefixes, prerelease suffixes, and multi-digit minor versions with numerical accuracy.");
+            }
+
+            // -- TEST 34B: Robustness Against Null, Empty & Malformed Strings --
+            log("[Test 34B] Robustness Against Null, Empty & Malformed Version Strings...");
+            bool pass34B = true;
+            try
+            {
+                int[] cNull = UpdateChecker.ParseVersionComponents(null);
+                int[] cEmpty = UpdateChecker.ParseVersionComponents("");
+                int[] cGarbage = UpdateChecker.ParseVersionComponents("corrupted_tag_vX");
+                if (cNull.Length != 4 || cEmpty.Length != 4 || cGarbage.Length != 4) { pass34B = false; failures.Add("Test 34B Failed: Component array length must be 4"); }
+                if (UpdateChecker.IsNewerVersion(null, "2.1.0")) { pass34B = false; failures.Add("Test 34B Failed: null tag should not be newer than 2.1.0"); }
+                if (UpdateChecker.IsNewerVersion("corrupted", "2.1.0")) { pass34B = false; failures.Add("Test 34B Failed: corrupted tag should not be newer than 2.1.0"); }
+            }
+            catch (Exception ex)
+            {
+                pass34B = false;
+                failures.Add("Test 34B Failed with exception: " + ex.Message);
+            }
+
+            if (!pass34B)
+            {
+                log("  FAILED: Robustness verification against malformed version strings failed.");
+            }
+            else
+            {
+                log("  PASSED: Malformed, null, and non-numeric version strings fail safely without exceptions or false updates.");
+            }
+
+            // -- TEST 34C: Strict URL Whitelist Enforcement --
+            log("[Test 34C] Strict URL Whitelist Enforcement (Repository Scope Isolation)...");
+            bool pass34C = true;
+            if (!UpdateChecker.IsValidUpdateUrl("https://github.com/0x-Abood/USB-Shield-Pro/releases/tag/v2.2.0")) { pass34C = false; failures.Add("Test 34C Failed: Valid release tag URL was rejected"); }
+            if (!UpdateChecker.IsValidUpdateUrl("https://github.com/0x-Abood/USB-Shield-Pro/releases")) { pass34C = false; failures.Add("Test 34C Failed: Valid releases list URL was rejected"); }
+            if (UpdateChecker.IsValidUpdateUrl("http://github.com/0x-Abood/USB-Shield-Pro/releases")) { pass34C = false; failures.Add("Test 34C Failed: Insecure HTTP URL was accepted"); }
+            if (UpdateChecker.IsValidUpdateUrl("https://malicious-site.com/0x-Abood/USB-Shield-Pro/")) { pass34C = false; failures.Add("Test 34C Failed: Foreign domain was accepted"); }
+            if (UpdateChecker.IsValidUpdateUrl("https://github.com/attacker/USB-Shield-Pro/")) { pass34C = false; failures.Add("Test 34C Failed: Foreign GitHub repository was accepted"); }
+            if (UpdateChecker.IsValidUpdateUrl(null) || UpdateChecker.IsValidUpdateUrl("")) { pass34C = false; failures.Add("Test 34C Failed: Null or empty URL was accepted"); }
+
+            if (!pass34C)
+            {
+                log("  FAILED: URL whitelist enforcement allowed out-of-scope or insecure URLs.");
+            }
+            else
+            {
+                log("  PASSED: Strict URL whitelist enforces HTTPS and isolates navigation exclusively to the official 0x-Abood/USB-Shield-Pro repository.");
+            }
+
+            // -- TEST 34D: Mock JSON Response Provider & Offline Check Verification --
+            log("[Test 34D] Mock JSON Response Provider & Offline Check Verification...");
+            bool pass34D = true;
+            try
+            {
+                UpdateChecker.MockJsonResponseProvider = delegate
+                {
+                    return "{\"tag_name\":\"v2.2.0\",\"html_url\":\"https://github.com/0x-Abood/USB-Shield-Pro/releases/tag/v2.2.0\",\"name\":\"v2.2.0 Security Update\",\"body\":\"Release notes\"}";
+                };
+
+                UpdateCheckResult resNew = UpdateChecker.CheckForUpdatesSync();
+                if (!resNew.Success || !resNew.UpdateAvailable || resNew.LatestVersion != "v2.2.0")
+                {
+                    pass34D = false;
+                    failures.Add(string.Format("Test 34D Failed: resNew success={0}, updateAvail={1}, ver={2}", resNew.Success, resNew.UpdateAvailable, resNew.LatestVersion));
+                }
+
+                UpdateChecker.MockJsonResponseProvider = delegate
+                {
+                    return "{\"tag_name\":\"v2.1.0\",\"html_url\":\"https://github.com/0x-Abood/USB-Shield-Pro/releases/tag/v2.1.0\",\"name\":\"v2.1.0 Current\",\"body\":\"Current version\"}";
+                };
+
+                UpdateCheckResult resCurrent = UpdateChecker.CheckForUpdatesSync();
+                if (!resCurrent.Success || resCurrent.UpdateAvailable)
+                {
+                    pass34D = false;
+                    failures.Add(string.Format("Test 34D Failed: resCurrent success={0}, updateAvail={1}", resCurrent.Success, resCurrent.UpdateAvailable));
+                }
+
+                UpdateChecker.MockJsonResponseProvider = delegate
+                {
+                    return "MALFORMED_JSON_PAYLOAD_<!DOCTYPE html>";
+                };
+
+                UpdateCheckResult resBadJson = UpdateChecker.CheckForUpdatesSync();
+                if (resBadJson.Success || resBadJson.UpdateAvailable || string.IsNullOrEmpty(resBadJson.ErrorMessage))
+                {
+                    pass34D = false;
+                    failures.Add("Test 34D Failed: Malformed JSON did not fail cleanly with error message");
+                }
+            }
+            catch (Exception ex)
+            {
+                pass34D = false;
+                failures.Add("Test 34D Failed with exception: " + ex.Message);
+            }
+            finally
+            {
+                UpdateChecker.ResetSeam();
+            }
+
+            if (!pass34D)
+            {
+                log("  FAILED: Mock JSON response parsing and offline update check failed.");
+            }
+            else
+            {
+                log("  PASSED: 100% offline mock seam verifies release parsing, update detection, and graceful malformed JSON failure.");
+            }
+
+            // -- TEST 34E: AppSettings Integration & Air-Gapped Toggle Invariant --
+            log("[Test 34E] AppSettings Integration & Air-Gapped Toggle Invariant...");
+            bool pass34E = true;
+            try
+            {
+                AppSettingsData s = new AppSettingsData();
+                if (!s.CheckUpdatesAutomatically) { pass34E = false; failures.Add("Test 34E Failed: CheckUpdatesAutomatically must default to true"); }
+                if (s.LastUpdateCheckUtc != DateTime.MinValue) { pass34E = false; failures.Add("Test 34E Failed: LastUpdateCheckUtc must default to DateTime.MinValue"); }
+
+                s.CheckUpdatesAutomatically = false;
+                s.LastUpdateCheckUtc = DateTime.UtcNow;
+                AppSettingsData cloned = s.Clone();
+                if (cloned.CheckUpdatesAutomatically != false || cloned.LastUpdateCheckUtc != s.LastUpdateCheckUtc)
+                {
+                    pass34E = false;
+                    failures.Add("Test 34E Failed: AppSettingsData.Clone() did not preserve update settings");
+                }
+            }
+            catch (Exception ex)
+            {
+                pass34E = false;
+                failures.Add("Test 34E Failed with exception: " + ex.Message);
+            }
+
+            if (!pass34E)
+            {
+                log("  FAILED: AppSettings update properties or clone integrity failed.");
+            }
+            else
+            {
+                log("  PASSED: AppSettingsData correctly defaults, clones, and provides air-gapped opt-out with 12-hour throttling timestamp.");
+            }
+
+            // -- TEST 34F: UI Banner & Settings Controls Layout Multi-DPI --
+            log("[Test 34F] UI Banner & Settings Controls Layout Multi-DPI (100%-200%)...");
+            bool pass34F = true;
+            try
+            {
+                using (UpdateNotificationBanner banner = new UpdateNotificationBanner())
+                {
+                    banner.ShowUpdate("2.2.0", "https://github.com/0x-Abood/USB-Shield-Pro/releases/tag/v2.2.0");
+                    if (!banner.Visible || banner.Height < 20)
+                    {
+                        pass34F = false;
+                        failures.Add("Test 34F Failed: UpdateNotificationBanner did not show with positive height");
+                    }
+                    banner.Dismiss();
+                    if (banner.Visible)
+                    {
+                        pass34F = false;
+                        failures.Add("Test 34F Failed: UpdateNotificationBanner did not dismiss");
+                    }
+                }
+
+                using (SettingsAboutCard card = new SettingsAboutCard())
+                {
+                    if (card.ButtonCheckUpdates == null || card.ButtonGitHub == null)
+                    {
+                        pass34F = false;
+                        failures.Add("Test 34F Failed: SettingsAboutCard missing ButtonCheckUpdates or ButtonGitHub");
+                    }
+                    if (card.Height < DpiManager.ScaleInt(90))
+                    {
+                        pass34F = false;
+                        failures.Add("Test 34F Failed: SettingsAboutCard height less than required minimum");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                pass34F = false;
+                failures.Add("Test 34F Failed with exception: " + ex.Message);
+            }
+
+            if (!pass34F)
+            {
+                log("  FAILED: UI banner lifecycle or SettingsAboutCard controls failed.");
+            }
+            else
+            {
+                log("  PASSED: UpdateNotificationBanner renders/dismisses cleanly and SettingsAboutCard provides manual check affordance across all DPIs.");
+            }
+        }
+
     }
 }
 

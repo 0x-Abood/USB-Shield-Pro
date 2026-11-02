@@ -20,6 +20,8 @@ namespace UsbShieldPro.Persistence
         public bool OnboardingCompleted { get; set; }
         public bool FullProtectionModeEnabled { get; set; }
         public bool SidebarCompact { get; set; }
+        public bool CheckUpdatesAutomatically { get; set; }
+        public DateTime LastUpdateCheckUtc { get; set; }
         public ProtectionPolicy ActivePolicy { get; set; }
 
         public AppSettingsData()
@@ -32,6 +34,8 @@ namespace UsbShieldPro.Persistence
             OnboardingCompleted = false;
             FullProtectionModeEnabled = false;
             SidebarCompact = false;
+            CheckUpdatesAutomatically = true;
+            LastUpdateCheckUtc = DateTime.MinValue;
             ActivePolicy = new ProtectionPolicy();
         }
 
@@ -47,6 +51,8 @@ namespace UsbShieldPro.Persistence
                 OnboardingCompleted = this.OnboardingCompleted,
                 FullProtectionModeEnabled = this.FullProtectionModeEnabled,
                 SidebarCompact = this.SidebarCompact,
+                CheckUpdatesAutomatically = this.CheckUpdatesAutomatically,
+                LastUpdateCheckUtc = this.LastUpdateCheckUtc,
                 ActivePolicy = this.ActivePolicy != null ? this.ActivePolicy.Clone() : new ProtectionPolicy()
             };
         }

@@ -1083,7 +1083,10 @@ namespace UsbShieldPro.UI
     public class SettingsAboutCard : Control
     {
         private readonly AppButton _btnGitHub;
+        private readonly AppButton _btnCheckUpdates;
         private Rectangle _linkRect = Rectangle.Empty;
+
+        public event EventHandler CheckUpdatesClicked;
 
         public SettingsAboutCard()
         {
@@ -1094,6 +1097,19 @@ namespace UsbShieldPro.UI
                      ControlStyles.SupportsTransparentBackColor, true);
 
             TabStop = false;
+
+            _btnCheckUpdates = new AppButton();
+            _btnCheckUpdates.SizeVariant = ButtonSize.Small;
+            _btnCheckUpdates.Variant = ButtonVariant.Secondary;
+            _btnCheckUpdates.Text = Loc.Get("SettingsCheckUpdatesBtn");
+            _btnCheckUpdates.Click += delegate
+            {
+                if (CheckUpdatesClicked != null)
+                {
+                    CheckUpdatesClicked(this, EventArgs.Empty);
+                }
+            };
+            Controls.Add(_btnCheckUpdates);
 
             _btnGitHub = new AppButton();
             _btnGitHub.SizeVariant = ButtonSize.Small;
@@ -1107,11 +1123,12 @@ namespace UsbShieldPro.UI
         }
 
         public AppButton ButtonGitHub { get { return _btnGitHub; } }
+        public AppButton ButtonCheckUpdates { get { return _btnCheckUpdates; } }
 
         public void UpdateHeight()
         {
             bool isRtl = (RightToLeft == RightToLeft.Yes) || Loc.IsRtl;
-            Height = DpiManager.ScaleInt(isRtl ? 132 : 124);
+            Height = DpiManager.ScaleInt(isRtl ? 136 : 128);
             PositionControls();
             Invalidate();
         }
@@ -1123,6 +1140,10 @@ namespace UsbShieldPro.UI
             if (_btnGitHub != null)
             {
                 _btnGitHub.Text = Loc.Get("SettingsGitHubRepoBtn");
+            }
+            if (_btnCheckUpdates != null)
+            {
+                _btnCheckUpdates.Text = Loc.Get("SettingsCheckUpdatesBtn");
             }
             UpdateHeight();
         }
@@ -1147,15 +1168,18 @@ namespace UsbShieldPro.UI
 
         private void PositionControls()
         {
-            if (_btnGitHub == null) return;
+            if (_btnGitHub == null || _btnCheckUpdates == null) return;
             bool isRtl = (RightToLeft == RightToLeft.Yes) || Loc.IsRtl;
             int pad = DpiManager.ScaleInt(16);
-            int btnW = DpiManager.ScaleInt(isRtl ? 175 : 150);
-            int btnH = DpiManager.ScaleInt(30);
-            int btnY = (Height - btnH) / 2;
+            int btnW = DpiManager.ScaleInt(isRtl ? 180 : 155);
+            int btnH = DpiManager.ScaleInt(28);
+            int gap = DpiManager.ScaleInt(8);
+            int totalBtnH = btnH * 2 + gap;
+            int btnY = Math.Max(pad, (Height - totalBtnH) / 2);
 
             int btnX = isRtl ? pad : (Width - pad - btnW);
-            _btnGitHub.Bounds = new Rectangle(btnX, btnY, btnW, btnH);
+            _btnCheckUpdates.Bounds = new Rectangle(btnX, btnY, btnW, btnH);
+            _btnGitHub.Bounds = new Rectangle(btnX, btnY + btnH + gap, btnW, btnH);
         }
 
         private void OnThemeChanged(object sender, EventArgs e)
@@ -1258,7 +1282,10 @@ namespace UsbShieldPro.UI
                 g.DrawImage(brandBmp, iconRect);
             }
 
-            int btnW = (_btnGitHub != null && _btnGitHub.Visible) ? (_btnGitHub.Width + DpiManager.ScaleInt(16)) : 0;
+            int maxBtnW = 0;
+            if (_btnGitHub != null && _btnGitHub.Visible) maxBtnW = Math.Max(maxBtnW, _btnGitHub.Width);
+            if (_btnCheckUpdates != null && _btnCheckUpdates.Visible) maxBtnW = Math.Max(maxBtnW, _btnCheckUpdates.Width);
+            int btnW = maxBtnW > 0 ? (maxBtnW + DpiManager.ScaleInt(16)) : 0;
             int textX = isRtl ? (pad + btnW) : (pad + iconSize + DpiManager.ScaleInt(16));
             int textW = Math.Max(DpiManager.ScaleInt(200), Width - (pad * 2) - iconSize - DpiManager.ScaleInt(16) - btnW);
 

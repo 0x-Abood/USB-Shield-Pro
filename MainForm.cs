@@ -332,6 +332,8 @@ namespace UsbShieldPro
         private AppToggle _toggleAutoStart;
         private AppToggle _toggleAutoLock;
         private AppToggle _toggleTray;
+        private AppToggle _toggleAutoUpdate;
+        private UpdateNotificationBanner _updateBanner;
         private SettingsSecurityCard _cardSecurity;
         private SettingsServiceCard _cardService;
         private SettingsAboutCard _cardAbout;
@@ -352,6 +354,8 @@ namespace UsbShieldPro
         public AppToggle SettingsAutoStartToggle { get { return _toggleAutoStart; } }
         public AppToggle SettingsAutoLockToggle { get { return _toggleAutoLock; } }
         public AppToggle SettingsTrayToggle { get { return _toggleTray; } }
+        public AppToggle SettingsAutoUpdateToggle { get { return _toggleAutoUpdate; } }
+        public UpdateNotificationBanner UpdateBanner { get { return _updateBanner; } }
         public void TriggerRefreshSettings() { RefreshSettingsTab(); }
         public void TriggerLayoutSettings() { LayoutSettingsTab(); }
         public void ScrollSettingsToTop()
@@ -1157,6 +1161,7 @@ namespace UsbShieldPro
             if (_tabRecovery != null) { try { _tabRecovery.Dispose(); } catch { } _tabRecovery = null; }
             if (_tabSettings != null) { try { _tabSettings.Dispose(); } catch { } _tabSettings = null; }
 
+            if (_updateBanner != null) { try { _updateBanner.Dispose(); } catch { } _updateBanner = null; }
             if (_contentPanel != null) { try { _contentPanel.Dispose(); } catch { } _contentPanel = null; }
             if (_sidebar != null) { try { _sidebar.Dispose(); } catch { } _sidebar = null; }
             if (_topBar != null) { try { _topBar.Dispose(); } catch { } _topBar = null; }
@@ -1230,6 +1235,12 @@ namespace UsbShieldPro
             Controls.Add(_sidebar);
 
             // ═══════════════════════════════════════════════════════════════
+            // LAYER 2.5: NON-INTRUSIVE UPDATE BANNER
+            // ═══════════════════════════════════════════════════════════════
+            _updateBanner = new UpdateNotificationBanner();
+            Controls.Add(_updateBanner);
+
+            // ═══════════════════════════════════════════════════════════════
             // LAYER 3: PAGE CONTENT CONTAINER
             // ═══════════════════════════════════════════════════════════════
             _contentPanel = new Panel();
@@ -1239,6 +1250,7 @@ namespace UsbShieldPro
 
             // Establish strict docking layout order: Edge docks at back dock first, fill at front docks last
             _sidebar.SendToBack();
+            _updateBanner.SendToBack();
             _topBar.SendToBack();
             _contentPanel.BringToFront();
 
@@ -5072,6 +5084,21 @@ namespace UsbShieldPro
             rowTray.ActionControl = _toggleTray;
             _cardBehavior.AddRow(rowTray);
 
+            _toggleAutoUpdate = new AppToggle();
+            _toggleAutoUpdate.Checked = appSettings.CheckUpdatesAutomatically;
+            _toggleAutoUpdate.CheckedChanged += delegate
+            {
+                AppSettingsData s = SettingsRepository.Load();
+                s.CheckUpdatesAutomatically = _toggleAutoUpdate.Checked;
+                SettingsRepository.Save(s);
+            };
+
+            SettingsRow rowAutoUpdate = new SettingsRow();
+            rowAutoUpdate.Title = Loc.Get("SettingsAutoUpdateTitle");
+            rowAutoUpdate.Description = Loc.Get("SettingsAutoUpdateDesc");
+            rowAutoUpdate.ActionControl = _toggleAutoUpdate;
+            _cardBehavior.AddRow(rowAutoUpdate);
+
             _tabSettingsScroll.ContentPanel.Controls.Add(_cardBehavior);
 
             // 3. Security & Access Control Card
@@ -5119,6 +5146,7 @@ namespace UsbShieldPro
 
             // 5. About Card
             _cardAbout = new SettingsAboutCard();
+            _cardAbout.CheckUpdatesClicked += delegate { OnCheckForUpdatesManual(); };
             _tabSettingsScroll.ContentPanel.Controls.Add(_cardAbout);
 
             _tabSettingsScroll.ContentPanel.Resize += delegate { LayoutSettingsTab(); };
@@ -5220,6 +5248,12 @@ namespace UsbShieldPro
             if (_cardService != null)
             {
                 _cardService.UpdateServiceState();
+            }
+
+            if (_toggleAutoUpdate != null)
+            {
+                AppSettingsData s = SettingsRepository.Load();
+                _toggleAutoUpdate.Checked = s.CheckUpdatesAutomatically;
             }
 
             LayoutSettingsTab();
@@ -5959,6 +5993,113 @@ namespace UsbShieldPro
             {
                 Program.LogStartup("ON_SHOWN WIZARD EXCEPTION: " + ex.Message);
             }
+
+            // Schedule non-blocking background update check (with 12h throttling & air-gap respect)
+            ScheduleStartupUpdateCheck();
+        }
+
+        private void ScheduleStartupUpdateCheck()
+        {
+            if (IsCaptureMode || Core.DeviceEnforcementLifecycleManager.IsTestMode) return;
+
+            // Delayed timer: 2500ms after form is shown, avoiding any startup UI stutter
+            System.Windows.Forms.Timer startupTimer = new System.Windows.Forms.Timer();
+            startupTimer.Interval = 2500;
+            startupTimer.Tick += delegate
+            {
+                startupTimer.Stop();
+                startupTimer.Dispose();
+
+                if (IsDisposed) return;
+
+                AppSettingsData s = SettingsRepository.Load();
+                if (!s.CheckUpdatesAutomatically) return;
+
+                if (s.LastUpdateCheckUtc != DateTime.MinValue &&
+                    DateTime.UtcNow - s.LastUpdateCheckUtc < TimeSpan.FromHours(12))
+                {
+                    return;
+                }
+
+                UpdateChecker.CheckForUpdatesAsync(delegate(UpdateCheckResult result)
+                {
+                    if (IsDisposed || !result.Success) return;
+
+                    try
+                    {
+                        AppSettingsData cur = SettingsRepository.Load();
+                        cur.LastUpdateCheckUtc = DateTime.UtcNow;
+                        SettingsRepository.Save(cur);
+
+                        if (result.UpdateAvailable && _updateBanner != null)
+                        {
+                            BeginInvoke(new Action(delegate
+                            {
+                                if (!IsDisposed && _updateBanner != null)
+                                {
+                                    _updateBanner.ShowUpdate(result.LatestVersion, result.HtmlUrl);
+                                }
+                            }));
+                        }
+                    }
+                    catch { }
+                });
+            };
+            startupTimer.Start();
+        }
+
+        private void OnCheckForUpdatesManual()
+        {
+            if (_cardAbout == null || _cardAbout.ButtonCheckUpdates == null) return;
+            AppButton btn = _cardAbout.ButtonCheckUpdates;
+            btn.Enabled = false;
+            btn.Text = Loc.Get("UpdateStatusChecking");
+
+            UpdateChecker.CheckForUpdatesAsync(delegate(UpdateCheckResult result)
+            {
+                if (IsDisposed) return;
+                try
+                {
+                    BeginInvoke(new Action(delegate
+                    {
+                        if (IsDisposed) return;
+                        btn.Enabled = true;
+                        btn.Text = Loc.Get("SettingsCheckUpdatesBtn");
+
+                        if (result.Success)
+                        {
+                            AppSettingsData s = SettingsRepository.Load();
+                            s.LastUpdateCheckUtc = DateTime.UtcNow;
+                            SettingsRepository.Save(s);
+
+                            if (result.UpdateAvailable)
+                            {
+                                if (_updateBanner != null)
+                                {
+                                    _updateBanner.ShowUpdate(result.LatestVersion, result.HtmlUrl);
+                                }
+
+                                string msg = string.Format(Loc.Get("UpdateStatusAvailable"), result.LatestVersion, result.CurrentVersion);
+                                DialogResult dr = MsgBox.Show(this, msg, Loc.Get("AppTitle"), MessageBoxButtons.YesNo);
+                                if (dr == DialogResult.Yes)
+                                {
+                                    UpdateChecker.OpenReleaseUrl(result.HtmlUrl);
+                                }
+                            }
+                            else
+                            {
+                                MsgBox.Show(this, string.Format(Loc.Get("UpdateStatusLatest"), result.CurrentVersion), Loc.Get("AppTitle"));
+                            }
+                        }
+                        else
+                        {
+                            string err = !string.IsNullOrEmpty(result.ErrorMessage) ? result.ErrorMessage : Loc.Get("UpdateNetworkError");
+                            MsgBox.Show(this, string.Format(Loc.Get("UpdateStatusFailed"), err), Loc.Get("AppTitle"));
+                        }
+                    }));
+                }
+                catch { }
+            });
         }
 
         private void ShowOnboardingWizard()

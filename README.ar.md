@@ -156,8 +156,8 @@ flowchart TD
 
 | الحزمة | الصيغة | الحجم | رابط التحميل | فحص الحماية والنزاهة |
 | :--- | :--- | :--- | :--- | :--- |
-| **المثبت التلقائي** | `.exe` | `1,237,504 بايت` | [تحميل Setup.exe](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1.0-Setup.exe) | [تقرير VirusTotal نظيف (0/72)](https://www.virustotal.com/gui/file/a8e0db5305cd3099d0f0580b5eb5a97e54ce7352e108c199b6532cf85a203cdc) |
-| **النسخة المحمولة** | `.zip` | `383,102 بايت` | [تحميل Portable.zip](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1.0-Portable.zip) | [تقرير VirusTotal نظيف (0/72)](https://www.virustotal.com/gui/file/64c525ce05419592516eae76faa8a680df14d024d6b05bebcb4bf2300b0102ad) |
+| **المثبت التلقائي** | `.exe` | `1,252,864 بايت` | [تحميل Setup.exe](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1.0-Setup.exe) | [تقرير VirusTotal نظيف (0/72)](https://www.virustotal.com/gui/file/9866f73b9c034355f0a6d42b9599b96f052d6aaabedcefbaeb911c7de33cffa8) |
+| **النسخة المحمولة** | `.zip` | `387,078 بايت` | [تحميل Portable.zip](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1.0-Portable.zip) | [تقرير VirusTotal نظيف (0/72)](https://www.virustotal.com/gui/file/b8087e19ee8de858d84a90a1f14e8ec65ea4cfc7d8b94792d67bc59b1a66aeb4) |
 | **ملف البصمات** | `.txt` | `2,811 بايت` | [تحميل ملف البصمات SHA-256](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1-SHA256.txt) | التحقق عبر `Get-FileHash` في PowerShell |
 
 ---
@@ -183,15 +183,28 @@ UsbShieldPro.exe --restore-exact
 
 ---
 
+## نظام إشعارات التحديث والترقية المباشرة
+
+يتضمن USB Shield Pro محركاً هادئاً وآمناً للإشعار بالتحديثات صُمم لإبقاء محطات العمل محدثة دون المساس بالأمان أو تنفيذ أي مهام شبكية غير مصرح بها:
+
+- **فحص بيانات الوصف للقراءة فقط في واجهة GUI حصراً:** يتم التحقق من التحديثات حصرياً من داخل الواجهة الرسومية عبر طلب HTTPS GET وحيد (`TLS 1.2`) لواجهة GitHub الرسمية (`https://api.github.com/repos/0x-Abood/USB-Shield-Pro/releases/latest`).
+- **أمان تام أمام مضادات الفيروسات (Zero Dropper / AV-Safe):** لا يقوم البرنامج إطلاقاً بتنزيل أو كتابة أو تشغيل أي ملفات تنفيذية في الخلفية، بل يكتفي بعرض شريط إشعار أنيق يتيح للمسؤول الانتقال لصفحة الإصدار الرسمية على GitHub.
+- **عزل شبكي كامل لخدمة النظام الخلفية:** تظل خدمة الويندوز الخلفية (`UsbShieldService` / `--service`) معزولة تماماً بنسبة 100% عن أي اتصال شبكي.
+- **قائمة نطاقات بيضاء صارمة:** يتم التحقق بدقة من أن أي رابط يفتح في المتصفح ينتمي حصرياً للمستودع الرسمي `https://github.com/0x-Abood/USB-Shield-Pro/`.
+- **دعم البيئات المعزولة (Air-Gapped) والتقييد الزمني:** يتم الفحص التلقائي بعد 2.5 ثانية من فتح الواجهة بشكل غير معطل، ومقيد بفاصل زمني لا يقل عن 12 ساعة. يمكن لمسؤولي الشبكات المعزولة تعطيل الفحص كلياً عبر **الإعدادات &larr; سلوك التطبيق &larr; التحقق من التحديثات تلقائياً**.
+- **ترقية مباشرة تحافظ على الإعدادات:** يؤدي تشغيل مثبت التحديث الجديد أو استبدال الملف التنفيذي إلى الحفاظ التام على سجل السياسات، وقاعدة الأجهزة الموثوقة، وسجل الاستعادة التاريخي في `%ProgramData%\USBShieldPro` دون أي فقدان للبيانات.
+
+---
+
 ## جدول البصمات الرقمية الرسمية (SHA-256)
 
 تم بناء جميع الملفات التنفيذية ببيئة نظيفة وخالية تماماً من الرموز البرمجية التصحيحية أو المسارات المحلية (`/optimize+ /debug-`).
 
 | اسم الملف | النوع | الحجم (بايت) | بصمة SHA-256 الرسمية |
 | :--- | :--- | :--- | :--- |
-| **`USB-Shield-Pro-v2.1.0-Setup.exe`** | مثبت الإعداد | `1,237,504` | `A8E0DB5305CD3099D0F0580B5EB5A97E54CE7352E108C199B6532CF85A203CDC` |
-| **`USB-Shield-Pro-v2.1.0-Portable.zip`** | حزمة محمولة | `383,102` | `64C525CE05419592516EAE76FAA8A680DF14D024D6B05BEBCB4BF2300B0102AD` |
-| **`UsbShieldPro.exe`** | ملف تنفيذي مستقل | `1,060,864` | `4F9A904E9AB5236C18D298DD78443D5021DB5781BFCF16C0C037100DFEC5AFA9` |
+| **`USB-Shield-Pro-v2.1.0-Setup.exe`** | مثبت الإعداد | `1,252,864` | `9866F73B9C034355F0A6D42B9599B96F052D6AAABEDCEFBAEB911C7DE33CFFA8` |
+| **`USB-Shield-Pro-v2.1.0-Portable.zip`** | حزمة محمولة | `387,078` | `B8087E19EE8DE858D84A90A1F14E8EC65EA4CFC7D8B94792D67BC59B1A66AEB4` |
+| **`UsbShieldPro.exe`** | ملف تنفيذي مستقل | `1,076,224` | `3045518ED612EF030B1041AB4DD7D60AF328A9C8CA591CFD44656A2DEC9D6826` |
 | **`UsbShieldPro.exe.config`** | ضبط الشاشات | `598` | `53840DABDB7510AC21965024AEC4797025C920C965D29BBAA46FFA324338C5B1` |
 | **`README.txt`** | ملاحظات الإصدار | `6,998` | `3B72B744C64DF260E54BBC5AE5B0888C9F742C320DB3C62C9D26D5CBC1DAEA4F` |
 
@@ -232,7 +245,7 @@ Get-FileHash .\release\USB-Shield-Pro-v2.1.0-Portable.zip -Algorithm SHA256
    ```cmd
    Installer\build_installer.bat
    ```
-4. تشغيل حزمة اختبارات الأتمتة الشاملة (27 جناح اختبار، 347 تأكيداً):
+4. تشغيل حزمة اختبارات الأتمتة الشاملة (28 جناح اختبار، 353 تأكيداً):
    ```cmd
    TestRunner.exe --test-harness
    ```

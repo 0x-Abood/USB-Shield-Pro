@@ -5,9 +5,9 @@
 1. CORE RELEASE EXECUTABLE:
 File:            UsbShieldPro.exe
 Path:            release\USB-Shield-Pro-v2.1\UsbShieldPro.exe
-Size:            1,060,864 bytes
-SHA-256:         4F9A904E9AB5236C18D298DD78443D5021DB5781BFCF16C0C037100DFEC5AFA9
-Build Timestamp: 2026-10-22 20:47:00 UTC+03:00
+Size:            1,076,224 bytes
+SHA-256:         3045518ED612EF030B1041AB4DD7D60AF328A9C8CA591CFD44656A2DEC9D6826
+Build Timestamp: 2026-11-02 17:17:00 UTC+03:00
 Target Platform: Windows 10 / Windows 11 x64 (.NET Framework 4.8)
 Manifest:        requireAdministrator
 Subsystem:       Windows GUI (WinExe -- production mode, no test harness, /debug-)
@@ -28,22 +28,22 @@ Purpose:         Production release documentation, architecture notes, and CLI r
 3. OFFICIAL DISTRIBUTION PACKAGES:
 File:            USB-Shield-Pro-v2.1.0-Portable.zip
 Path:            release\USB-Shield-Pro-v2.1.0-Portable.zip
-Size:            383,102 bytes
-SHA-256:         64C525CE05419592516EAE76FAA8A680DF14D024D6B05BEBCB4BF2300B0102AD
+Size:            387,078 bytes
+SHA-256:         B8087E19EE8DE858D84A90A1F14E8EC65EA4CFC7D8B94792D67BC59B1A66AEB4
 Purpose:         Zero-installation portable distribution containing UsbShieldPro.exe, config, and README
 
 File:            USB-Shield-Pro-v2.1.0-Setup.exe
 Path:            release\USB-Shield-Pro-v2.1.0-Setup.exe
-Size:            1,237,504 bytes
-SHA-256:         A8E0DB5305CD3099D0F0580B5EB5A97E54CE7352E108C199B6532CF85A203CDC
+Size:            1,252,864 bytes
+SHA-256:         9866F73B9C034355F0A6D42B9599B96F052D6AAABEDCEFBAEB911C7DE33CFFA8
 Purpose:         Self-contained native Windows installer with bilingual Arabic RTL/English UI, shortcut creation, and Programs & Features registration
 
 --------------------------------------------------------------------------------
 STANDARD CHECKSUM FORMAT (sha256sum compatible):
 --------------------------------------------------------------------------------
-4f9a904e9ab5236c18d298dd78443d5021db5781bfcf16c0c037100dfec5afa9  UsbShieldPro.exe
+3045518ed612ef030b1041ab4dd7d60af328a9c8ca591cfd44656a2dec9d6826  UsbShieldPro.exe
 53840dabdb7510ac21965024aec4797025c920c965d29bbaa46ffa324338c5b1  UsbShieldPro.exe.config
 3b72b744c64df260e54bbc5ae5b0888c9f742c320db3c62c9d26d5cbc1daea4f  README.txt
-64c525ce05419592516eae76faa8a680df14d024d6b05bebcb4bf2300b0102ad  USB-Shield-Pro-v2.1.0-Portable.zip
-a8e0db5305cd3099d0f0580b5eb5a97e54ce7352e108c199b6532cf85a203cdc  USB-Shield-Pro-v2.1.0-Setup.exe
+b8087e19ee8de858d84a90a1f14e8ec65ea4cfc7d8b94792d67bc59b1a66aeb4  USB-Shield-Pro-v2.1.0-Portable.zip
+9866f73b9c034355f0a6d42b9599b96f052d6aaabedcefbaeb911c7de33cffa8  USB-Shield-Pro-v2.1.0-Setup.exe
 ================================================================================

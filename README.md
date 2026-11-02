@@ -156,8 +156,8 @@ Empirical behavior observed and verified across standard Windows 10 (v1903+) and
 
 | Package | Format | Size | Download Link | Integrity & Antivirus |
 | :--- | :--- | :--- | :--- | :--- |
-| **Native Installer** | `.exe` | `1,237,504 bytes` | [Download Setup.exe](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1.0-Setup.exe) | [VirusTotal Clean (0/72)](https://www.virustotal.com/gui/file/a8e0db5305cd3099d0f0580b5eb5a97e54ce7352e108c199b6532cf85a203cdc) |
-| **Portable Archive** | `.zip` | `383,102 bytes` | [Download Portable.zip](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1.0-Portable.zip) | [VirusTotal Clean (0/72)](https://www.virustotal.com/gui/file/64c525ce05419592516eae76faa8a680df14d024d6b05bebcb4bf2300b0102ad) |
+| **Native Installer** | `.exe` | `1,252,864 bytes` | [Download Setup.exe](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1.0-Setup.exe) | [VirusTotal Clean (0/72)](https://www.virustotal.com/gui/file/9866f73b9c034355f0a6d42b9599b96f052d6aaabedcefbaeb911c7de33cffa8) |
+| **Portable Archive** | `.zip` | `387,078 bytes` | [Download Portable.zip](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1.0-Portable.zip) | [VirusTotal Clean (0/72)](https://www.virustotal.com/gui/file/b8087e19ee8de858d84a90a1f14e8ec65ea4cfc7d8b94792d67bc59b1a66aeb4) |
 | **SHA-256 Manifest** | `.txt` | `2,811 bytes` | [Download Checksums](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1-SHA256.txt) | Verified via PowerShell `Get-FileHash` |
 
 ---
@@ -183,15 +183,28 @@ UsbShieldPro.exe --restore-exact
 
 ---
 
+## Update Notification & In-Place Upgrades
+
+USB Shield Pro includes a passive, non-intrusive update notification engine designed to keep workstations current without compromising security or executing background payloads:
+
+- **GUI-Only Read-Only Metadata Inspection:** Update checks are performed exclusively within the graphical management interface via a single HTTPS GET request (`TLS 1.2`) to the official GitHub API (`https://api.github.com/repos/0x-Abood/USB-Shield-Pro/releases/latest`).
+- **Zero-Dropper / AV-Safe Invariant:** The application never downloads, writes, or executes binary payloads in the background. It solely alerts the administrator through an in-app banner and directs them to the official GitHub release page.
+- **Strict Domain Whitelist:** External links strictly validate the target destination against `https://github.com/0x-Abood/USB-Shield-Pro/` before opening the system's default browser.
+- **Strict Service Network Isolation:** The background Windows Service daemon (`UsbShieldService` / `--service`) is 100% network-isolated and never initiates any network sockets.
+- **Air-Gapped Workstations & Throttling:** Automatic checks occur at most once every 12 hours after a 2.5-second non-blocking startup window. Administrators of air-gapped networks can permanently disable all update queries under **Settings &rarr; Application Behavior &rarr; Check for updates automatically**.
+- **In-Place Upgrade Fidelity:** Upgrading via `USB-Shield-Pro-v2.1.0-Setup.exe` or replacing the standalone binary preserves all protection configurations, trusted device enrollments, and pre-Shield recovery baselines under `%ProgramData%\USBShieldPro` with 100% backward compatibility.
+
+---
+
 ## Official Release Checksums (SHA-256)
 
 All production binaries are clean-room compiled (`/optimize+ /debug-`) without local machine paths, debug symbols, or external script dependencies.
 
 | File Name | Target Type | Size (Bytes) | Official SHA-256 Checksum |
 | :--- | :--- | :--- | :--- |
-| **`USB-Shield-Pro-v2.1.0-Setup.exe`** | Native Installer | `1,237,504` | `A8E0DB5305CD3099D0F0580B5EB5A97E54CE7352E108C199B6532CF85A203CDC` |
-| **`USB-Shield-Pro-v2.1.0-Portable.zip`** | Portable Archive | `383,102` | `64C525CE05419592516EAE76FAA8A680DF14D024D6B05BEBCB4BF2300B0102AD` |
-| **`UsbShieldPro.exe`** | Standalone Executable | `1,060,864` | `4F9A904E9AB5236C18D298DD78443D5021DB5781BFCF16C0C037100DFEC5AFA9` |
+| **`USB-Shield-Pro-v2.1.0-Setup.exe`** | Native Installer | `1,252,864` | `9866F73B9C034355F0A6D42B9599B96F052D6AAABEDCEFBAEB911C7DE33CFFA8` |
+| **`USB-Shield-Pro-v2.1.0-Portable.zip`** | Portable Archive | `387,078` | `B8087E19EE8DE858D84A90A1F14E8EC65EA4CFC7D8B94792D67BC59B1A66AEB4` |
+| **`UsbShieldPro.exe`** | Standalone Executable | `1,076,224` | `3045518ED612EF030B1041AB4DD7D60AF328A9C8CA591CFD44656A2DEC9D6826` |
 | **`UsbShieldPro.exe.config`** | High-DPI Manifest | `598` | `53840DABDB7510AC21965024AEC4797025C920C965D29BBAA46FFA324338C5B1` |
 | **`README.txt`** | Release Notes | `6,998` | `3B72B744C64DF260E54BBC5AE5B0888C9F742C320DB3C62C9D26D5CBC1DAEA4F` |
 
@@ -232,7 +245,7 @@ Get-FileHash .\release\USB-Shield-Pro-v2.1.0-Portable.zip -Algorithm SHA256
    ```cmd
    Installer\build_installer.bat
    ```
-4. Run the regression test suite (27 Suites, 347 Assertions):
+4. Run the regression test suite (28 Suites, 353 Assertions):
    ```cmd
    TestRunner.exe --test-harness
    ```
