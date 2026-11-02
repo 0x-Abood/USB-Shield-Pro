@@ -61,7 +61,7 @@ USB Shield Pro operates through two distinct, complementary enforcement models:
 - **Enterprise Policy Coexistence (Active Directory GPO / Microsoft Intune):** USB Shield Pro configures and manages Local Machine Policies (`HKLM`). In managed enterprise domains, centralized Domain Group Policies (GPO) or Microsoft Intune profiles configured to enforce conflicting storage policies may overwrite local registry settings during periodic background policy refresh cycles (`gpupdate /force`).
 - **Human Interface Devices (HID / BadUSB Injections):** Malicious hardware implants that present themselves as keyboard or mouse controllers (such as Rubber Ducky or BadUSB microcontrollers) load HID drivers rather than `USBSTOR` and are strictly outside the operational scope of storage controllers. Mitigating rogue HID devices requires physical USB port locks or bus-level device class filters.
 - **Hardware Identifier Spoofing:** Allowlisting is based on vendor-reported hardware descriptors (`VID`, `PID`, and serial number). Hardware microcontrollers specifically programmed to duplicate the exact descriptors and serial string of an enrolled drive cannot be distinguished at the user-mode bus query layer without hardware-level cryptographic attestation.
-- **Automated CI Test Harness Scope:** The automated CI test suite running on GitHub Actions (27 suites / 347 assertions) validates rules engine logic, atomic registry transaction safety, state journal rollback consistency, installer packaging, and Disk 0 safety invariants programmatically (Unit & Integration Logic). It does not emulate physical USB hardware bus signaling on virtualized cloud runner instances.
+- **Automated CI Test Harness Scope:** The automated CI test suite running on GitHub Actions (28 suites / 353 assertions) validates rules engine logic, atomic registry transaction safety, state journal rollback consistency, installer packaging, and Disk 0 safety invariants programmatically (Unit & Integration Logic). It does not emulate physical USB hardware bus signaling on virtualized cloud runner instances.
 
 ---
 
@@ -156,8 +156,8 @@ Empirical behavior observed and verified across standard Windows 10 (v1903+) and
 
 | Package | Format | Size | Download Link | Integrity & Antivirus |
 | :--- | :--- | :--- | :--- | :--- |
-| **Native Installer** | `.exe` | `1,252,864 bytes` | [Download Setup.exe](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1.0-Setup.exe) | [VirusTotal Clean (0/72)](https://www.virustotal.com/gui/file/9866f73b9c034355f0a6d42b9599b96f052d6aaabedcefbaeb911c7de33cffa8) |
-| **Portable Archive** | `.zip` | `387,078 bytes` | [Download Portable.zip](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1.0-Portable.zip) | [VirusTotal Clean (0/72)](https://www.virustotal.com/gui/file/b8087e19ee8de858d84a90a1f14e8ec65ea4cfc7d8b94792d67bc59b1a66aeb4) |
+| **Native Installer** | `.exe` | `1,253,376 bytes` | [Download Setup.exe](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1.0-Setup.exe) | [VirusTotal Clean (0/72)](https://www.virustotal.com/gui/file/8d675c4ca6b26d8e29f9ebb2f9b4431df7d347e2c476b6c090dad84b6619872d) |
+| **Portable Archive** | `.zip` | `387,108 bytes` | [Download Portable.zip](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1.0-Portable.zip) | [VirusTotal Clean (0/72)](https://www.virustotal.com/gui/file/8d991350abce42915e8c0b87f49017a4a347a9212592af778090eb7c89a29f6b) |
 | **SHA-256 Manifest** | `.txt` | `2,811 bytes` | [Download Checksums](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1-SHA256.txt) | Verified via PowerShell `Get-FileHash` |
 
 ---
@@ -202,9 +202,9 @@ All production binaries are clean-room compiled (`/optimize+ /debug-`) without l
 
 | File Name | Target Type | Size (Bytes) | Official SHA-256 Checksum |
 | :--- | :--- | :--- | :--- |
-| **`USB-Shield-Pro-v2.1.0-Setup.exe`** | Native Installer | `1,252,864` | `9866F73B9C034355F0A6D42B9599B96F052D6AAABEDCEFBAEB911C7DE33CFFA8` |
-| **`USB-Shield-Pro-v2.1.0-Portable.zip`** | Portable Archive | `387,078` | `B8087E19EE8DE858D84A90A1F14E8EC65EA4CFC7D8B94792D67BC59B1A66AEB4` |
-| **`UsbShieldPro.exe`** | Standalone Executable | `1,076,224` | `3045518ED612EF030B1041AB4DD7D60AF328A9C8CA591CFD44656A2DEC9D6826` |
+| **`USB-Shield-Pro-v2.1.0-Setup.exe`** | Native Installer | `1,253,376` | `8D675C4CA6B26D8E29F9EBB2F9B4431DF7D347E2C476B6C090DAD84B6619872D` |
+| **`USB-Shield-Pro-v2.1.0-Portable.zip`** | Portable Archive | `387,108` | `8D991350ABCE42915E8C0B87F49017A4A347A9212592AF778090EB7C89A29F6B` |
+| **`UsbShieldPro.exe`** | Standalone Executable | `1,076,736` | `C0EDC176CCAD5CB490933F8FCE8D94141D67E31B49E6A80DCAF88E772ACE8311` |
 | **`UsbShieldPro.exe.config`** | High-DPI Manifest | `598` | `53840DABDB7510AC21965024AEC4797025C920C965D29BBAA46FFA324338C5B1` |
 | **`README.txt`** | Release Notes | `6,998` | `3B72B744C64DF260E54BBC5AE5B0888C9F742C320DB3C62C9D26D5CBC1DAEA4F` |
 

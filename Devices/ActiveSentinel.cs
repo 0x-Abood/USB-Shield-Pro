@@ -422,13 +422,23 @@ namespace UsbShieldPro.Devices
 
         public static void CancelArrivalReconciliation(bool resetPendingS0 = false)
         {
+            System.Threading.Tasks.Task taskToWait = null;
             lock (_reconciliationLock)
             {
                 if (_reconciliationCts != null)
                 {
                     try { _reconciliationCts.Cancel(); } catch { }
                 }
+                taskToWait = LastReconciliationTask;
             }
+
+            if (taskToWait != null && !taskToWait.IsCompleted)
+            {
+                try { taskToWait.Wait(300); } catch { }
+            }
+
+            System.Threading.Interlocked.Exchange(ref _reconciliationGate, 0);
+
             if (resetPendingS0)
             {
                 LatencyTracker.ResetPnpArrivalNotification();

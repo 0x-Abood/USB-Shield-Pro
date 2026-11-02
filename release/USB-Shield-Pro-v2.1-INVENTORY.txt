@@ -15,8 +15,8 @@ Release Date:       2026-10-18
 --------------------------------------------------------------------------------
 
 1. UsbShieldPro.exe (Clean-Room Gold Master Executable)
-   - Size:            1,076,224 bytes
-   - SHA-256:         3045518ED612EF030B1041AB4DD7D60AF328A9C8CA591CFD44656A2DEC9D6826
+   - Size:            1,076,736 bytes
+   - SHA-256:         C0EDC176CCAD5CB490933F8FCE8D94141D67E31B49E6A80DCAF88E772ACE8311
    - Architecture:    x64 / AnyCPU (runs 64-bit on x64 Windows)
    - Manifest:        requireAdministrator
    - Subsystem:       Windows GUI (WinExe -- no debug console, /debug-)
@@ -42,14 +42,14 @@ Release Date:       2026-10-18
 --------------------------------------------------------------------------------
 
 1. USB-Shield-Pro-v2.1.0-Portable.zip
-   - Size:            387,078 bytes
-   - SHA-256:         B8087E19EE8DE858D84A90A1F14E8EC65EA4CFC7D8B94792D67BC59B1A66AEB4
+   - Size:            387,108 bytes
+   - SHA-256:         8D991350ABCE42915E8C0B87F49017A4A347A9212592AF778090EB7C89A29F6B
    - Architecture:    Zip Archive containing UsbShieldPro.exe, config, and README
    - Purpose:         Zero-installation portable distribution package for enterprise admins and portable flash drive deployment.
 
 2. USB-Shield-Pro-v2.1.0-Setup.exe
-   - Size:            1,252,864 bytes
-   - SHA-256:         9866F73B9C034355F0A6D42B9599B96F052D6AAABEDCEFBAEB911C7DE33CFFA8
+   - Size:            1,253,376 bytes
+   - SHA-256:         8D675C4CA6B26D8E29F9EBB2F9B4431DF7D347E2C476B6C090DAD84B6619872D
    - Architecture:    Self-contained C# WinForms native installer with embedded binaries
    - Manifest:        requireAdministrator
    - Subsystem:       Windows GUI (WinExe, /debug-)

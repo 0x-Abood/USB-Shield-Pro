@@ -4872,6 +4872,8 @@ namespace UsbShieldPro.Core
             DeviceEjector.ResetSeams();
             DeviceDiscovery.ResetSeams();
             ActiveSentinel.ResetSeams();
+            EnforcementOwnerResolver.ResetSeams();
+            EnforcementOwnerResolver.ResolveOwnerOverride = delegate { return EnforcementOwnerState.GuiFallback; };
             DeviceEnforcementLifecycleManager.EnableTestMode();
 
             var testPolicy9BM = new ProtectionPolicy { WhitelistMode = true };
@@ -4946,6 +4948,7 @@ namespace UsbShieldPro.Core
             {
                 log("  PASSED: Arrival miss followed by bounded reconciliation successfully correlated S0 to arriving device, executed eject exactly once, and established EjectedUntilRemoval lifecycle state.");
             }
+            EnforcementOwnerResolver.ResetSeams();
 
             // ── TEST 9BN: Duplicate Arrival Burst Preserves S0 and Dedupes Workers ──
             log("[Test 9BN] Duplicate Arrival Burst Preserves S0 and Dedupes Workers...");
@@ -4953,6 +4956,8 @@ namespace UsbShieldPro.Core
             DeviceEjector.ResetSeams();
             DeviceDiscovery.ResetSeams();
             ActiveSentinel.ResetSeams();
+            EnforcementOwnerResolver.ResetSeams();
+            EnforcementOwnerResolver.ResolveOwnerOverride = delegate { return EnforcementOwnerState.GuiFallback; };
             DeviceEnforcementLifecycleManager.EnableTestMode();
 
             var testPolicy9BN = new ProtectionPolicy { WhitelistMode = true };
@@ -4989,15 +4994,18 @@ namespace UsbShieldPro.Core
             bool s0Preserved9BN = (s0Burst9BN == s0First9BN && s0First9BN > 0);
 
             // 2. Schedule reconciliation; attempt duplicate start calls concurrently
-            ActiveSentinel.ReconciliationScheduleSeam = new int[] { 5 };
-            ActiveSentinel.ReconciliationDelaySeam = ms => { };
+            AutoResetEvent delayGate9BN = new AutoResetEvent(false);
+            ActiveSentinel.ReconciliationScheduleSeam = new int[] { 50 };
+            ActiveSentinel.ReconciliationDelaySeam = ms => { delayGate9BN.WaitOne(1000); };
             DeviceDiscovery.RawDiskCandidatesSeam = () => new List<DeviceIdentity> { dev9BN };
 
             bool startedFirst9BN = ActiveSentinel.StartArrivalReconciliation(testPolicy9BN, false);
             bool startedDuplicate9BN = ActiveSentinel.StartArrivalReconciliation(testPolicy9BN, false);
+            delayGate9BN.Set();
 
             bool completed9BN = ActiveSentinel.LastReconciliationTask != null &&
                                 ActiveSentinel.LastReconciliationTask.Wait(2000);
+            delayGate9BN.Dispose();
 
             bool ok9BN = s0Preserved9BN && startedFirst9BN && !startedDuplicate9BN &&
                          completed9BN && (ejectCount9BN == 1);
@@ -5012,6 +5020,7 @@ namespace UsbShieldPro.Core
             {
                 log("  PASSED: Rapid PnP arrival burst preserved original S0 timestamp; second concurrent reconciliation trigger deduplicated (exactly 1 worker, 1 eject).");
             }
+            EnforcementOwnerResolver.ResetSeams();
 
             // ── TEST 9BO: Periodic Sweep vs Reconciliation Race ──
             log("[Test 9BO] Periodic Sweep vs Reconciliation Race...");

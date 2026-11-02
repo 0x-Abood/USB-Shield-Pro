@@ -61,7 +61,7 @@
 - **التعايش مع بيئات الدومين المؤسسية (Active Directory GPO / Microsoft Intune):** تدير الأداة سياسات السجل المحلية للجهاز (`Local Machine Policies`). في بيئات العمل المؤسسية المدارة بواسطة `Domain GPO` أو `Intune`، قد تقوم سياسات الدومين بالكتابة فوق السياسات المحلية عند تحديث السياسات الدوري (`gpupdate /force`).
 - **أجهزة الإدخال وهجمات BadUSB (HID Keyboard Emulation):** العتاد الخبيث الذي يُعرّف نفسه كوحدة إدخال مفاتيح (مثل هجمات BadUSB أو أجهزة Rubber Ducky) لا يقوم بتحميل مشغل التخزين `USBSTOR` ويقع خارج نطاق أدوات التحكم في وسائط التخزين. التصدي لهذه الهجمات يتطلب أقفالاً فيزيائية للمنافذ أو حلول تحكم على مستوى أجهزة HID.
 - **تزوير المعرفات العتادية (Hardware Identifier Spoofing):** تعتمد القائمة البيضاء على المعرفات العتادية المصرح بها من قِبل وحدة التحكم في الجهاز. إذا تم استخدام شريحة ميكروكنترولر برمجية قابلة للتهيئة لنسخ نفس الـ `VID/PID` والرقم التسلسلي لجهاز موثوق، فلا يمكن تمييزها على مستوى استعلام فضاء المستخدم دون مصادقة تشفيرية على مستوى العتاد.
-- **نطاق جناح اختبارات CI الآلية (CI Test Harness Scope):** يتحقق جناح الاختبارات الآلي في CI على GitHub Actions (27 جناح اختبار / 347 تأكيداً برمجياً) من منطق مطابقة القواعد، وسلامة معاملات السجل ومعاملات التراجع، وبناء الحزم وحماية Disk 0 برمجياً (Unit & Integration Logic)، ولا يقوم بمحاكاة أجهزة USB فيزيائية حقيقية على خوادم GitHub السحابية.
+- **نطاق جناح اختبارات CI الآلية (CI Test Harness Scope):** يتحقق جناح الاختبارات الآلي في CI على GitHub Actions (28 جناح اختبار / 353 تأكيداً برمجياً) من منطق مطابقة القواعد، وسلامة معاملات السجل ومعاملات التراجع، وبناء الحزم وحماية Disk 0 برمجياً (Unit & Integration Logic)، ولا يقوم بمحاكاة أجهزة USB فيزيائية حقيقية على خوادم GitHub السحابية.
 
 ---
 
@@ -156,8 +156,8 @@ flowchart TD
 
 | الحزمة | الصيغة | الحجم | رابط التحميل | فحص الحماية والنزاهة |
 | :--- | :--- | :--- | :--- | :--- |
-| **المثبت التلقائي** | `.exe` | `1,252,864 بايت` | [تحميل Setup.exe](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1.0-Setup.exe) | [تقرير VirusTotal نظيف (0/72)](https://www.virustotal.com/gui/file/9866f73b9c034355f0a6d42b9599b96f052d6aaabedcefbaeb911c7de33cffa8) |
-| **النسخة المحمولة** | `.zip` | `387,078 بايت` | [تحميل Portable.zip](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1.0-Portable.zip) | [تقرير VirusTotal نظيف (0/72)](https://www.virustotal.com/gui/file/b8087e19ee8de858d84a90a1f14e8ec65ea4cfc7d8b94792d67bc59b1a66aeb4) |
+| **المثبت التلقائي** | `.exe` | `1,253,376 بايت` | [تحميل Setup.exe](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1.0-Setup.exe) | [تقرير VirusTotal نظيف (0/72)](https://www.virustotal.com/gui/file/8d675c4ca6b26d8e29f9ebb2f9b4431df7d347e2c476b6c090dad84b6619872d) |
+| **النسخة المحمولة** | `.zip` | `387,108 بايت` | [تحميل Portable.zip](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1.0-Portable.zip) | [تقرير VirusTotal نظيف (0/72)](https://www.virustotal.com/gui/file/8d991350abce42915e8c0b87f49017a4a347a9212592af778090eb7c89a29f6b) |
 | **ملف البصمات** | `.txt` | `2,811 بايت` | [تحميل ملف البصمات SHA-256](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1-SHA256.txt) | التحقق عبر `Get-FileHash` في PowerShell |
 
 ---
@@ -202,9 +202,9 @@ UsbShieldPro.exe --restore-exact
 
 | اسم الملف | النوع | الحجم (بايت) | بصمة SHA-256 الرسمية |
 | :--- | :--- | :--- | :--- |
-| **`USB-Shield-Pro-v2.1.0-Setup.exe`** | مثبت الإعداد | `1,252,864` | `9866F73B9C034355F0A6D42B9599B96F052D6AAABEDCEFBAEB911C7DE33CFFA8` |
-| **`USB-Shield-Pro-v2.1.0-Portable.zip`** | حزمة محمولة | `387,078` | `B8087E19EE8DE858D84A90A1F14E8EC65EA4CFC7D8B94792D67BC59B1A66AEB4` |
-| **`UsbShieldPro.exe`** | ملف تنفيذي مستقل | `1,076,224` | `3045518ED612EF030B1041AB4DD7D60AF328A9C8CA591CFD44656A2DEC9D6826` |
+| **`USB-Shield-Pro-v2.1.0-Setup.exe`** | مثبت الإعداد | `1,253,376` | `8D675C4CA6B26D8E29F9EBB2F9B4431DF7D347E2C476B6C090DAD84B6619872D` |
+| **`USB-Shield-Pro-v2.1.0-Portable.zip`** | حزمة محمولة | `387,108` | `8D991350ABCE42915E8C0B87F49017A4A347A9212592AF778090EB7C89A29F6B` |
+| **`UsbShieldPro.exe`** | ملف تنفيذي مستقل | `1,076,736` | `C0EDC176CCAD5CB490933F8FCE8D94141D67E31B49E6A80DCAF88E772ACE8311` |
 | **`UsbShieldPro.exe.config`** | ضبط الشاشات | `598` | `53840DABDB7510AC21965024AEC4797025C920C965D29BBAA46FFA324338C5B1` |
 | **`README.txt`** | ملاحظات الإصدار | `6,998` | `3B72B744C64DF260E54BBC5AE5B0888C9F742C320DB3C62C9D26D5CBC1DAEA4F` |
 

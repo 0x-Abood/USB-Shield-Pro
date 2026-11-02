@@ -55,6 +55,8 @@ namespace UsbShieldPro.Core
         public static void ResetSeams()
         {
             _resolveOwnerOverride = null;
+            _serviceStartPending = false;
+            ResetCache();
         }
 
         public static void ResetCache()
