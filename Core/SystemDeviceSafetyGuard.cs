@@ -159,8 +159,15 @@ namespace UsbShieldPro.Core
                 device.PhysicalTransport == PhysicalBusType.Sata ||
                 device.PhysicalTransport == PhysicalBusType.Ata ||
                 device.PhysicalTransport == PhysicalBusType.Atapi ||
+                device.PhysicalTransport == PhysicalBusType.Scsi ||
                 device.PhysicalTransport == PhysicalBusType.Raid ||
-                device.PhysicalTransport == PhysicalBusType.IScsi)
+                device.PhysicalTransport == PhysicalBusType.Sas ||
+                device.PhysicalTransport == PhysicalBusType.IScsi ||
+                device.PhysicalTransport == PhysicalBusType.Spaces ||
+                device.PhysicalTransport == PhysicalBusType.Virtual ||
+                device.PhysicalTransport == PhysicalBusType.FileBackedVirtual ||
+                device.PhysicalTransport == PhysicalBusType.Scm ||
+                device.PhysicalTransport == PhysicalBusType.Ufs)
             {
                 reason = "Internal system bus (" + device.PhysicalTransport + ") is strictly protected.";
                 return SafetyValidationResult.RejectedInternalBus;

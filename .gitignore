@@ -32,6 +32,7 @@ query
 /scratch/
 /audit/
 /.agents/
+/baseline_release_v2.1.0_preserved/
 
 # IDE & Development Metadata
 .vs/

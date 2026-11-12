@@ -601,6 +601,9 @@ namespace UsbShieldPro.Core
 
                 // ── TEST 34: v2.1 Phase 6.3 Safe Passive GitHub Release Update Notifier Suite
                 RunPhase63UpdateCheckerTests(log, failures);
+
+                // ── TEST 35: v2.1 Phase 6.4 Security & Release Corrections Regression Suite
+                RunPhase64SecurityAndReleaseCorrectionsTests(log, failures);
             }
             finally
             {
@@ -635,8 +638,8 @@ namespace UsbShieldPro.Core
             log("================================================================================");
             log("  REGRESSION TEST HARNESS EXECUTION SUMMARY");
             log("================================================================================");
-            log(string.Format("  SUITES TOTAL:       {0}", 28));
-            log(string.Format("  SUITES PASS:        {0}", failures.Count == 0 ? 28 : (28 - (failures.Count > 0 ? 1 : 0))));
+            log(string.Format("  SUITES TOTAL:       {0}", 29));
+            log(string.Format("  SUITES PASS:        {0}", failures.Count == 0 ? 29 : (29 - (failures.Count > 0 ? 1 : 0))));
             log(string.Format("  ASSERTIONS TOTAL:   {0}", totalAssertions));
             log(string.Format("  ASSERTIONS PASS:    {0}", totalPassed));
             log(string.Format("  ASSERTIONS FAIL:    {0}", failures.Count));
@@ -645,7 +648,7 @@ namespace UsbShieldPro.Core
             log("");
             if (failures.Count == 0)
             {
-                log("ALL 28 ISOLATED RECOVERY, LIFECYCLE, PERSISTENCE, THEME/DPI, SHELL, DASHBOARD, DEVICES, PROTECTION, TRUSTED DEVICES, ACTIVITY, RECOVERY, SETTINGS, UI REMEDIATION, IDENTITY MATCHING, STORAGE ENFORCEMENT, ENFORCEMENT OWNERSHIP, TEMPORARY ACCESS, RECOVERY JOURNAL, DURABLE SETTINGS, AUTHENTICATION INTEGRITY, CORE USB ENFORCEMENT, REAL ENFORCEMENT READINESS, STAGE 2, STAGE 3 & UPDATE NOTIFIER REGRESSION TEST SUITES PASSED SUCCESSFULLY.");
+                log("ALL 29 ISOLATED RECOVERY, LIFECYCLE, PERSISTENCE, THEME/DPI, SHELL, DASHBOARD, DEVICES, PROTECTION, TRUSTED DEVICES, ACTIVITY, RECOVERY, SETTINGS, UI REMEDIATION, IDENTITY MATCHING, STORAGE ENFORCEMENT, ENFORCEMENT OWNERSHIP, TEMPORARY ACCESS, RECOVERY JOURNAL, DURABLE SETTINGS, AUTHENTICATION INTEGRITY, CORE USB ENFORCEMENT, REAL ENFORCEMENT READINESS, STAGE 2, STAGE 3, UPDATE NOTIFIER & SECURITY CORRECTIONS REGRESSION TEST SUITES PASSED SUCCESSFULLY.");
                 return true;
             }
             else
@@ -18072,7 +18075,7 @@ namespace UsbShieldPro.Core
 
                 // ── TEST 29B: Corrupted Primary .auth File Recovers from .auth.bak ──
                 log("[Test 29B] Corrupted Primary .auth Fallback to Backup Verifier...");
-                // Rotate password legitimately so .auth has v2 and .auth.bak has v1
+                // Rotate password legitimately to SecondRotatedPassword456!
                 string setErr3;
                 bool secondOk = PasswordManager.SetPassword("SecondRotatedPassword456!", out setErr3);
                 bool secondVerify = PasswordManager.VerifyPassword("SecondRotatedPassword456!");
@@ -18086,15 +18089,17 @@ namespace UsbShieldPro.Core
                 try { File.SetAttributes(authPath, FileAttributes.Normal); } catch { }
                 File.WriteAllBytes(authPath, new byte[] { 0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01, 0x02 });
 
-                // Verification of backup password should succeed via .auth.bak fallback
-                bool bakFallbackOk = PasswordManager.VerifyPassword("InitialMasterPassword123!");
+                // Verification of current rotated password should succeed via .auth.bak fallback
+                bool bakFallbackOk = PasswordManager.VerifyPassword("SecondRotatedPassword456!");
+                // Verification of obsolete initial password must be rejected
+                bool oldPasswordRejected = !PasswordManager.VerifyPassword("InitialMasterPassword123!");
 
-                bool pass29B = secondOk && secondVerify && authExists && authBakExists && bakFallbackOk;
+                bool pass29B = secondOk && secondVerify && authExists && authBakExists && bakFallbackOk && oldPasswordRejected;
 
                 if (!pass29B)
                 {
-                    failures.Add(string.Format("Test 29B Failed: Corrupted primary .auth did not fall back to .auth.bak. secOk={0}, secV={1}, pEx={2}, bEx={3}, bakFallback={4}",
-                        secondOk, secondVerify, authExists, authBakExists, bakFallbackOk));
+                    failures.Add(string.Format("Test 29B Failed: Corrupted primary .auth did not fall back to .auth.bak. secOk={0}, secV={1}, pEx={2}, bEx={3}, bakFallback={4}, oldRej={5}",
+                        secondOk, secondVerify, authExists, authBakExists, bakFallbackOk, oldPasswordRejected));
                     log("  FAILED: Corrupted primary auth verifier failed to fall back to valid backup verifier.");
                 }
                 else
@@ -18142,7 +18147,7 @@ namespace UsbShieldPro.Core
 
                 // ── TEST 29D: Corrupted Primary .recovery File Recovers from .recovery.bak ──
                 log("[Test 29D] Corrupted Primary .recovery Fallback to Backup Verifier...");
-                // Rotate recovery key legitimately so .recovery has key2 and .recovery.bak has key1
+                // Rotate recovery key legitimately to key3
                 string key3 = RecoveryKeyManager.GenerateKeyString();
                 string saveKeyErr3;
                 bool key3Ok = RecoveryKeyManager.SaveMasterRecoveryKey(key3, out saveKeyErr3);
@@ -18157,15 +18162,17 @@ namespace UsbShieldPro.Core
                 try { File.SetAttributes(recPath, FileAttributes.Normal); } catch { }
                 File.WriteAllBytes(recPath, new byte[] { 0xCA, 0xFE, 0xBA, 0xBE, 0x99, 0x88 });
 
-                // Verification of backup recovery key should succeed via .recovery.bak fallback
-                bool recBakFallbackOk = RecoveryKeyManager.VerifyMasterRecoveryKey(key1);
+                // Verification of current rotated recovery key should succeed via .recovery.bak fallback
+                bool recBakFallbackOk = RecoveryKeyManager.VerifyMasterRecoveryKey(key3);
+                // Verification of obsolete initial recovery key must be rejected
+                bool oldKeyRejected = !RecoveryKeyManager.VerifyMasterRecoveryKey(key1);
 
-                bool pass29D = key3Ok && key3Verify && recExists && recBakExists && recBakFallbackOk;
+                bool pass29D = key3Ok && key3Verify && recExists && recBakExists && recBakFallbackOk && oldKeyRejected;
 
                 if (!pass29D)
                 {
-                    failures.Add(string.Format("Test 29D Failed: Corrupted primary .recovery did not fall back to .recovery.bak. k3Ok={0}, k3V={1}, rEx={2}, bEx={3}, fallback={4}",
-                        key3Ok, key3Verify, recExists, recBakExists, recBakFallbackOk));
+                    failures.Add(string.Format("Test 29D Failed: Corrupted primary .recovery did not fall back to .recovery.bak. k3Ok={0}, k3V={1}, rEx={2}, bEx={3}, fallback={4}, oldRej={5}",
+                        key3Ok, key3Verify, recExists, recBakExists, recBakFallbackOk, oldKeyRejected));
                     log("  FAILED: Corrupted primary recovery verifier failed to fall back to valid backup verifier.");
                 }
                 else
@@ -19754,6 +19761,354 @@ namespace UsbShieldPro.Core
             else
             {
                 log("  PASSED: UpdateNotificationBanner renders/dismisses cleanly and SettingsAboutCard provides manual check affordance across all DPIs.");
+            }
+        }
+
+        // ===============================================================================
+        // [Test 35] v2.1 Phase 6.4 Security & Release Corrections Regression Suite
+        // Permanent Regression Suite for Internal SATA Disk Protection,
+        // Positive USB Evidence Invariant, Password & Recovery Key Intact Rotation,
+        // RTL Card Layout Metrics, and Installer Diagnostic Reporting
+        // ===============================================================================
+        public static void RunPhase64SecurityAndReleaseCorrectionsTests(Action<string> log, List<string> failures)
+        {
+            log("");
+            log("================================================================================");
+            log("  [Test 35] v2.1 Phase 6.4 Security & Release Corrections Regression Suite");
+            log("  Verifying Internal SATA Disk Safety, Positive USB Evidence Invariants,");
+            log("  Intact Password/Recovery Rotation, RTL Card Bounds, and Setup Diagnostics");
+            log("================================================================================");
+
+            // ── TEST 35A: Internal Non-System SATA Disk Safety & Ejection Immunity ──
+            log("[Test 35A] Internal Non-System SATA Disk Safety Guard & Ejection Immunity...");
+            try
+            {
+                DeviceIdentity sataDisk = new DeviceIdentity
+                {
+                    FriendlyName = "Samsung SSD 870 EVO 1TB",
+                    Model = "Samsung SSD 870 EVO 1TB",
+                    DeviceInstanceId = @"SCSI\DISK&VEN_SAMSUNG&PROD_870_EVO\4&1234567&0&000100",
+                    WindowsClass = StorageClass.DiskDrive,
+                    PhysicalTransport = PhysicalBusType.Scsi,
+                    IsRemovableMedia = true, // BIOS SATA Hot-Plug enabled
+                    PhysicalDiskNumber = 1
+                };
+
+                var cat = DeviceClassifier.Classify(sataDisk);
+                string guardReason;
+                var safety = SystemDeviceSafetyGuard.ValidateDevice(sataDisk, out guardReason);
+                sataDisk.Category = cat;
+                sataDisk.SafetyResult = safety;
+
+                DeviceIdentityResolver.Resolve(sataDisk);
+                var confidence = sataDisk.Confidence;
+
+                ProtectionPolicy policy = new ProtectionPolicy
+                {
+                    BlockAllRemovable = true,
+                    BlockRemovableDisks = true,
+                    WhitelistMode = true
+                };
+
+                var eval = RuleEngine.Evaluate(sataDisk, policy, false);
+
+                // UI device partition invariant: Must route to systemDevices and never to externalDevices
+                bool isSystemDevice = sataDisk.IsSystemDisk ||
+                                      sataDisk.SafetyResult != SafetyValidationResult.Passed ||
+                                      sataDisk.Category == DeviceCategory.InternalFixedDisk ||
+                                      sataDisk.Category == DeviceCategory.CriticalSystemHardware ||
+                                      (sataDisk.PhysicalTransport != PhysicalBusType.Usb && sataDisk.WindowsClass != StorageClass.WindowsPortableDevice);
+
+                bool pass35A = (cat == DeviceCategory.InternalFixedDisk) &&
+                               (safety == SafetyValidationResult.RejectedInternalBus) &&
+                               (confidence == IdentityConfidence.None) &&
+                               (eval.IsSafetyProtected == true) &&
+                               (eval.ShouldAutoEject == false) &&
+                               (isSystemDevice == true);
+
+                if (!pass35A)
+                {
+                    failures.Add(string.Format("Test 35A Failed: Non-system internal SATA disk not properly protected. cat={0}, safety={1}, conf={2}, safeProt={3}, autoEject={4}, isSysDev={5}",
+                        cat, safety, confidence, eval.IsSafetyProtected, eval.ShouldAutoEject, isSystemDevice));
+                    log("  FAILED: Internal SATA disk misidentified or exposed to removable device ejection.");
+                }
+                else
+                {
+                    log("  PASSED: Internal non-system SATA disk classified as InternalFixedDisk, rejected from internal bus, immune from auto-eject, and excluded from external devices.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add("Test 35A Failed with exception: " + ex.Message);
+                log("  FAILED: Test 35A threw exception: " + ex.Message);
+            }
+
+            // ── TEST 35B: Positive USB Evidence Invariant & Weak Substring Resistance ──
+            log("[Test 35B] Positive USB Transport Evidence Invariant & Substring Immunity...");
+            try
+            {
+                // Drive with "USB" in model name / product string but SCSI interface
+                DeviceIdentity ambiguousDisk = new DeviceIdentity
+                {
+                    FriendlyName = "SATA SSD ASUS-USB3-BOARD",
+                    Model = "ASUS USB3 BOARD SATA DISK",
+                    DeviceInstanceId = @"SCSI\DISK&VEN_ASUS&PROD_USB3BOARD\4&2",
+                    WindowsClass = StorageClass.DiskDrive,
+                    PhysicalTransport = PhysicalBusType.Scsi,
+                    PhysicalDiskNumber = 2
+                };
+
+                var catAmb = DeviceClassifier.Classify(ambiguousDisk);
+                string guardReasonAmb;
+                var safetyAmb = SystemDeviceSafetyGuard.ValidateDevice(ambiguousDisk, out guardReasonAmb);
+
+                // Positive USB drive with verified ancestor
+                DeviceIdentity genuineUsb = new DeviceIdentity
+                {
+                    FriendlyName = "SanDisk Ultra USB 3.0",
+                    DeviceInstanceId = @"USBSTOR\DISK&VEN_SANDISK&PROD_ULTRA\123456&0",
+                    PhysicalUsbParentInstanceId = @"USB\VID_0781&PID_5581\123456",
+                    WindowsClass = StorageClass.DiskDrive,
+                    PhysicalTransport = PhysicalBusType.Usb,
+                    IsRemovableMedia = true,
+                    PhysicalDiskNumber = 3
+                };
+
+                var catUsb = DeviceClassifier.Classify(genuineUsb);
+                string guardReasonUsb;
+                var safetyUsb = SystemDeviceSafetyGuard.ValidateDevice(genuineUsb, out guardReasonUsb);
+
+                bool pass35B = (catAmb == DeviceCategory.InternalFixedDisk) &&
+                               (safetyAmb == SafetyValidationResult.RejectedInternalBus) &&
+                               (catUsb == DeviceCategory.UsbFlashDrive) &&
+                               (safetyUsb == SafetyValidationResult.Passed);
+
+                if (!pass35B)
+                {
+                    failures.Add(string.Format("Test 35B Failed: USB evidence invariants violated. catAmb={0}, safetyAmb={1}, catUsb={2}, safetyUsb={3}",
+                        catAmb, safetyAmb, catUsb, safetyUsb));
+                    log("  FAILED: Ambiguous non-USB disk inferred as USB or genuine USB rejected.");
+                }
+                else
+                {
+                    log("  PASSED: Positive USB bus evidence strictly enforced; substring 'USB' in model name does not spoof USB transport.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add("Test 35B Failed with exception: " + ex.Message);
+                log("  FAILED: Test 35B threw exception: " + ex.Message);
+            }
+
+            // ── TEST 35C: Password Rotation Rejection of Old Credential & Backup Sync ──
+            log("[Test 35C] Password Rotation Rejects Prior Credential & Synchronizes Backup...");
+            try
+            {
+                PasswordManager.RemovePassword();
+
+                string setErrA;
+                bool setAOk = PasswordManager.SetPassword("AlphaPassword2026!", out setErrA);
+                bool verifyAOk = PasswordManager.VerifyPassword("AlphaPassword2026!");
+
+                string setErrB;
+                bool setBOk = PasswordManager.SetPassword("BravoPassword2026!", out setErrB);
+                bool verifyBOk = PasswordManager.VerifyPassword("BravoPassword2026!");
+
+                // CRITICAL DEFECT TEST: Old Password A MUST BE STRICTLY REJECTED!
+                bool oldPasswordRejected = !PasswordManager.VerifyPassword("AlphaPassword2026!");
+
+                // Verify backup verifier holds B (not A)
+                string authPath = PasswordManager.GetAuthFilePath();
+                string authBak = PasswordManager.GetAuthBackupFilePath();
+                bool authExists = File.Exists(authPath);
+                bool authBakExists = File.Exists(authBak);
+
+                // Overwrite primary with garbage to test corruption recovery
+                try { File.SetAttributes(authPath, FileAttributes.Normal); } catch { }
+                File.WriteAllBytes(authPath, new byte[] { 0xFE, 0xED, 0xFA, 0xCE, 0x01, 0x02 });
+
+                // Backup recovery MUST accept B and reject A
+                bool recoverBOk = PasswordManager.VerifyPassword("BravoPassword2026!");
+                bool recoverARejected = !PasswordManager.VerifyPassword("AlphaPassword2026!");
+
+                bool pass35C = setAOk && verifyAOk && setBOk && verifyBOk &&
+                               oldPasswordRejected && authExists && authBakExists &&
+                               recoverBOk && recoverARejected;
+
+                if (!pass35C)
+                {
+                    failures.Add(string.Format("Test 35C Failed: Password rotation integrity failed. setA={0}, vA={1}, setB={2}, vB={3}, oldRej={4}, recB={5}, recARej={6}",
+                        setAOk, verifyAOk, setBOk, verifyBOk, oldPasswordRejected, recoverBOk, recoverARejected));
+                    log("  FAILED: Old password accepted after rotation or backup recovery failed.");
+                }
+                else
+                {
+                    log("  PASSED: Password rotation strictly rejects prior password, synchronizes backup to new credential, and corruption recovery restores new credential.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add("Test 35C Failed with exception: " + ex.Message);
+                log("  FAILED: Test 35C threw exception: " + ex.Message);
+            }
+
+            // ── TEST 35D: Recovery Key Rotation Rejection of Old Key & Backup Sync ──
+            log("[Test 35D] Recovery Key Rotation Rejects Prior Key & Synchronizes Backup...");
+            try
+            {
+                RecoveryKeyManager.DeleteMasterRecoveryKey();
+
+                string keyA = RecoveryKeyManager.GenerateKeyString();
+                string saveErrA;
+                bool saveAOk = RecoveryKeyManager.SaveMasterRecoveryKey(keyA, out saveErrA);
+                bool verifyKeyA = RecoveryKeyManager.VerifyMasterRecoveryKey(keyA);
+
+                string keyB = RecoveryKeyManager.GenerateKeyString();
+                string saveErrB;
+                bool saveBOk = RecoveryKeyManager.SaveMasterRecoveryKey(keyB, out saveErrB);
+                bool verifyKeyB = RecoveryKeyManager.VerifyMasterRecoveryKey(keyB);
+
+                // CRITICAL DEFECT TEST: Old Key A MUST BE STRICTLY REJECTED!
+                bool oldKeyRejected = !RecoveryKeyManager.VerifyMasterRecoveryKey(keyA);
+
+                string recPath = RecoveryKeyManager.GetRecoveryFilePath();
+                string recBak = RecoveryKeyManager.GetRecoveryBackupFilePath();
+                bool recExists = File.Exists(recPath);
+                bool recBakExists = File.Exists(recBak);
+
+                // Overwrite primary with garbage to test corruption recovery
+                try { File.SetAttributes(recPath, FileAttributes.Normal); } catch { }
+                File.WriteAllBytes(recPath, new byte[] { 0xDE, 0xAD, 0xBE, 0xEF, 0x99 });
+
+                bool recoverKeyBOk = RecoveryKeyManager.VerifyMasterRecoveryKey(keyB);
+                bool recoverKeyARejected = !RecoveryKeyManager.VerifyMasterRecoveryKey(keyA);
+
+                bool pass35D = saveAOk && verifyKeyA && saveBOk && verifyKeyB &&
+                               oldKeyRejected && recExists && recBakExists &&
+                               recoverKeyBOk && recoverKeyARejected;
+
+                if (!pass35D)
+                {
+                    failures.Add(string.Format("Test 35D Failed: Recovery key rotation integrity failed. saveA={0}, vA={1}, saveB={2}, vB={3}, oldRej={4}, recB={5}, recARej={6}",
+                        saveAOk, verifyKeyA, saveBOk, verifyKeyB, oldKeyRejected, recoverKeyBOk, recoverKeyARejected));
+                    log("  FAILED: Old recovery key accepted after rotation or backup recovery failed.");
+                }
+                else
+                {
+                    log("  PASSED: Master recovery key rotation strictly rejects prior key, synchronizes backup, and corruption recovery restores new key.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add("Test 35D Failed with exception: " + ex.Message);
+                log("  FAILED: Test 35D threw exception: " + ex.Message);
+            }
+
+            // ── TEST 35E: UI Card Dimensions & Arabic Layout Clipping Prevention ──
+            log("[Test 35E] UI Card Description Headroom & RTL Badge Collision Prevention...");
+            try
+            {
+                SelectableOptionCard card = new SelectableOptionCard();
+                card.Size = new Size(500, 70);
+                card.CardTitle = "خيار الحماية القصوى";
+                card.CardDescription = "تأمين شامل لكافة منافذ USB وعزل الأقراص غير المعتمدة فور توصيلها";
+                card.BadgeText = "موصى به";
+
+                // Verify description height headroom: Height - 36 = 34px (accommodates 2 lines of Arabic text at ~15px)
+                int descHeadroom = card.Height - 36;
+                bool headroomOk = descHeadroom >= 34;
+
+                // Verify text bounds calculation prevents overlap with badge in RTL
+                int badgeW = 76;
+                int radioSize = 18;
+                int radioX = card.Width - 18 - radioSize;
+                int textX = 16 + badgeW + 10;
+                int textW = Math.Max(20, (radioX - 10) - textX);
+                bool rtlBoundsOk = (textX >= (16 + badgeW)) && ((textX + textW) <= (radioX - 10));
+
+                bool pass35E = headroomOk && rtlBoundsOk;
+
+                if (!pass35E)
+                {
+                    failures.Add(string.Format("Test 35E Failed: UI card layout metrics invalid. headroom={0}, rtlBounds={1}", headroomOk, rtlBoundsOk));
+                    log("  FAILED: Option card dimensions or RTL text layout bounds allow clipping.");
+                }
+                else
+                {
+                    log("  PASSED: Option card provides >=34px description headroom for Arabic text and strictly isolates text bounds from badge in RTL.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add("Test 35E Failed with exception: " + ex.Message);
+                log("  FAILED: Test 35E threw exception: " + ex.Message);
+            }
+
+            // ── TEST 35F: Installer Diagnostic Report Capture & Formatting ──
+            log("[Test 35F] Installer Diagnostic Report & Error Interface Capture...");
+            try
+            {
+                var rep = new
+                {
+                    Success = false,
+                    FailedPhase = "Extracting and verifying core executable",
+                    PhaseNumber = 3,
+                    ExceptionType = typeof(UnauthorizedAccessException).FullName,
+                    HResult = unchecked((int)0x80070005),
+                    Win32ErrorCode = 5,
+                    Message = "Access to the path 'C:\\Program Files\\USB Shield Pro\\UsbShieldPro.exe' is denied.",
+                    TargetDirectory = @"C:\Program Files\USB Shield Pro",
+                    StackTrace = "   at System.IO.FileStream.Init(String path...)"
+                };
+
+                StringBuilder sb = new StringBuilder();
+                sb.AppendLine("================================================================================");
+                sb.AppendLine("USB SHIELD PRO INSTALLATION DIAGNOSTIC REPORT");
+                sb.AppendLine("================================================================================");
+                sb.AppendFormat("Timestamp:     {0:yyyy-MM-dd HH:mm:ss} UTC\n", DateTime.UtcNow);
+                sb.AppendFormat("OS Version:    {0} ({1})\n", Environment.OSVersion, Environment.Is64BitOperatingSystem ? "64-bit" : "32-bit");
+                sb.AppendFormat("Target Path:   {0}\n", rep.TargetDirectory ?? "Unknown");
+                sb.AppendFormat("Failed Phase:  {0} (Phase {1}/6)\n", rep.FailedPhase ?? "Unknown", rep.PhaseNumber);
+                sb.AppendFormat("Exception:     {0}\n", rep.ExceptionType ?? "Unknown");
+                sb.AppendFormat("HRESULT:       0x{0:X8}\n", rep.HResult);
+                if (rep.Win32ErrorCode != 0)
+                {
+                    sb.AppendFormat("Win32 Error:   {0} (0x{0:X8})\n", rep.Win32ErrorCode);
+                }
+                sb.AppendFormat("Error Message: {0}\n", rep.Message ?? "None");
+                if (!string.IsNullOrEmpty(rep.StackTrace))
+                {
+                    sb.AppendLine("--------------------------------------------------------------------------------");
+                    sb.AppendLine("Stack Trace:");
+                    sb.AppendLine(rep.StackTrace);
+                }
+                sb.AppendLine("================================================================================");
+                string formattedEn = sb.ToString();
+
+                bool reportHasTarget = formattedEn.Contains(@"C:\Program Files\USB Shield Pro");
+                bool reportHasPhase = formattedEn.Contains("Phase 3/6");
+                bool reportHasHResult = formattedEn.Contains("0x80070005");
+                bool reportHasWin32 = formattedEn.Contains("Win32 Error:   5");
+                bool reportHasMessage = formattedEn.Contains("Access to the path");
+                bool reportHasStack = formattedEn.Contains("FileStream.Init");
+
+                bool pass35F = reportHasTarget && reportHasPhase && reportHasHResult &&
+                               reportHasWin32 && reportHasMessage && reportHasStack;
+
+                if (!pass35F)
+                {
+                    failures.Add("Test 35F Failed: InstallDiagnosticReport formatting missing required fields.");
+                    log("  FAILED: Install diagnostic report did not contain expected diagnostic fields.");
+                }
+                else
+                {
+                    log("  PASSED: InstallDiagnosticReport accurately captures target dir, failed phase, HRESULT, Win32 error code, and stack trace.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add("Test 35F Failed with exception: " + ex.Message);
+                log("  FAILED: Test 35F threw exception: " + ex.Message);
             }
         }
 

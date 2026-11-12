@@ -18,11 +18,22 @@ namespace UsbShieldPro.Devices
         {
             if (device == null) return DeviceCategory.Unknown;
 
-            // 1. Safety Guard Check
+            // 1. Safety Guard Check: System, internal, and non-USB storage fail-safe to InternalFixedDisk
             if (device.IsSystemOrBootDrive() ||
                 device.PhysicalTransport == PhysicalBusType.Nvme ||
                 device.PhysicalTransport == PhysicalBusType.Sata ||
-                device.PhysicalTransport == PhysicalBusType.Ata)
+                device.PhysicalTransport == PhysicalBusType.Ata ||
+                device.PhysicalTransport == PhysicalBusType.Atapi ||
+                device.PhysicalTransport == PhysicalBusType.Scsi ||
+                device.PhysicalTransport == PhysicalBusType.Raid ||
+                device.PhysicalTransport == PhysicalBusType.Sas ||
+                device.PhysicalTransport == PhysicalBusType.IScsi ||
+                device.PhysicalTransport == PhysicalBusType.Spaces ||
+                device.PhysicalTransport == PhysicalBusType.Virtual ||
+                device.PhysicalTransport == PhysicalBusType.FileBackedVirtual ||
+                device.PhysicalTransport == PhysicalBusType.Scm ||
+                device.PhysicalTransport == PhysicalBusType.Ufs ||
+                (device.PhysicalTransport != PhysicalBusType.Usb && device.WindowsClass != StorageClass.WindowsPortableDevice))
             {
                 return DeviceCategory.InternalFixedDisk;
             }

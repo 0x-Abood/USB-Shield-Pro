@@ -179,7 +179,17 @@ namespace UsbShieldPro.Devices
                 device.PhysicalTransport == PhysicalBusType.Nvme ||
                 device.PhysicalTransport == PhysicalBusType.Sata ||
                 device.PhysicalTransport == PhysicalBusType.Ata ||
+                device.PhysicalTransport == PhysicalBusType.Atapi ||
+                device.PhysicalTransport == PhysicalBusType.Scsi ||
                 device.PhysicalTransport == PhysicalBusType.Raid ||
+                device.PhysicalTransport == PhysicalBusType.Sas ||
+                device.PhysicalTransport == PhysicalBusType.IScsi ||
+                device.PhysicalTransport == PhysicalBusType.Spaces ||
+                device.PhysicalTransport == PhysicalBusType.Virtual ||
+                device.PhysicalTransport == PhysicalBusType.FileBackedVirtual ||
+                device.PhysicalTransport == PhysicalBusType.Scm ||
+                device.PhysicalTransport == PhysicalBusType.Ufs ||
+                (device.PhysicalTransport != PhysicalBusType.Usb && device.WindowsClass != StorageClass.WindowsPortableDevice) ||
                 device.SafetyResult != SafetyValidationResult.Passed)
             {
                 return IdentityConfidence.None;

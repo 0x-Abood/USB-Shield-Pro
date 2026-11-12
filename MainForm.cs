@@ -2096,8 +2096,11 @@ namespace UsbShieldPro
 
             foreach (var dev in allDevices)
             {
-                if (dev.IsSystemDisk || dev.SafetyResult == SafetyValidationResult.RejectedSystemOrBootDisk ||
-                    dev.Category == DeviceCategory.InternalFixedDisk || dev.Category == DeviceCategory.CriticalSystemHardware)
+                if (dev.IsSystemDisk ||
+                    dev.SafetyResult != SafetyValidationResult.Passed ||
+                    dev.Category == DeviceCategory.InternalFixedDisk ||
+                    dev.Category == DeviceCategory.CriticalSystemHardware ||
+                    (dev.PhysicalTransport != PhysicalBusType.Usb && dev.WindowsClass != StorageClass.WindowsPortableDevice))
                 {
                     systemDevices.Add(dev);
                 }
@@ -2445,7 +2448,8 @@ namespace UsbShieldPro
 
                 foreach (var dev in devices)
                 {
-                    if (dev.IsRemovableMedia || dev.PhysicalTransport == PhysicalBusType.Usb)
+                    if ((dev.PhysicalTransport == PhysicalBusType.Usb || dev.WindowsClass == StorageClass.WindowsPortableDevice) &&
+                        dev.Category != DeviceCategory.InternalFixedDisk && dev.Category != DeviceCategory.CriticalSystemHardware)
                     {
                         string guardReason;
                         if (SystemDeviceSafetyGuard.ValidateDevice(dev, out guardReason) == SafetyValidationResult.Passed)
@@ -6223,14 +6227,25 @@ namespace UsbShieldPro
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            if (!IsCaptureMode && e.CloseReason == CloseReason.UserClosing && SettingsRepository.Load().MinimizeToTray)
+            if (!IsCaptureMode && e.CloseReason == CloseReason.UserClosing)
             {
-                e.Cancel = true;
-                WindowState = FormWindowState.Minimized;
-                Hide();
-                ShowInTaskbar = false;
-                if (_tray != null) _tray.ShowBalloon(Loc.Get("AppTitle"), Loc.Get("MinToTray"));
-                return;
+                if (SettingsRepository.Load().MinimizeToTray)
+                {
+                    e.Cancel = true;
+                    WindowState = FormWindowState.Minimized;
+                    Hide();
+                    ShowInTaskbar = false;
+                    if (_tray != null) _tray.ShowBalloon(Loc.Get("AppTitle"), Loc.Get("MinToTray"));
+                    return;
+                }
+                else
+                {
+                    if (!RequireAuth(Loc.Get("Exit")))
+                    {
+                        e.Cancel = true;
+                        return;
+                    }
+                }
             }
             try { StorageNotificationManager.Unregister(); } catch { }
             if (_registeredTrayWakeup != null)

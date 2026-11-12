@@ -1233,8 +1233,37 @@ namespace UsbShieldPro
             }
 
             // Text layout
-            int textX = isRtl ? 16 : (radioX + radioSize + 16);
-            int textW = Width - radioSize - 50;
+            int textX;
+            int textW;
+            int badgeW = 76;
+            bool hasBadge = !string.IsNullOrEmpty(_badge);
+
+            if (isRtl)
+            {
+                if (hasBadge)
+                {
+                    textX = 16 + badgeW + 10;
+                    textW = Math.Max(20, (radioX - 10) - textX);
+                }
+                else
+                {
+                    textX = 16;
+                    textW = Math.Max(20, (radioX - 10) - textX);
+                }
+            }
+            else
+            {
+                textX = radioX + radioSize + 14;
+                if (hasBadge)
+                {
+                    int badgeX = Width - 16 - badgeW;
+                    textW = Math.Max(20, (badgeX - 10) - textX);
+                }
+                else
+                {
+                    textW = Math.Max(20, Width - 16 - textX);
+                }
+            }
 
             StringFormat sfTitle = new StringFormat();
             sfTitle.LineAlignment = StringAlignment.Center;
@@ -1242,16 +1271,15 @@ namespace UsbShieldPro
             if (isRtl)
                 sfTitle.FormatFlags = StringFormatFlags.DirectionRightToLeft;
 
-            Rectangle titleRect = new Rectangle(textX, 12, textW, 24);
+            Rectangle titleRect = new Rectangle(textX, 8, textW, 22);
             using (SolidBrush tb = new SolidBrush(_selected ? Theme.AccentBlue : Theme.TextPrimary))
                 g.DrawString(_title, Theme.FontBold, tb, titleRect, sfTitle);
 
             // Optional Badge
-            if (!string.IsNullOrEmpty(_badge))
+            if (hasBadge)
             {
-                int badgeW = 76;
                 int badgeX = isRtl ? 16 : (Width - 16 - badgeW);
-                Rectangle bRect = new Rectangle(badgeX, 14, badgeW, 20);
+                Rectangle bRect = new Rectangle(badgeX, 11, badgeW, 20);
                 using (SolidBrush bBg = new SolidBrush(Theme.AccentGreenDim))
                     Theme.FillRoundedRect(g, bBg, bRect, 4);
                 using (Pen bPen = new Pen(Theme.AccentGreen, 1f))
@@ -1269,7 +1297,7 @@ namespace UsbShieldPro
             sfDesc.Alignment = StringAlignment.Near;
             if (isRtl)
                 sfDesc.FormatFlags = StringFormatFlags.DirectionRightToLeft;
-            Rectangle descRect = new Rectangle(textX, 38, textW, Height - 44);
+            Rectangle descRect = new Rectangle(textX, 32, textW, Math.Max(20, Height - 36));
             using (SolidBrush db = new SolidBrush(Theme.TextSecondary))
                 g.DrawString(_desc, Theme.FontSmall, db, descRect, sfDesc);
         }
@@ -2324,22 +2352,22 @@ namespace UsbShieldPro
             _optNoPassword = new SelectableOptionCard();
             _optNoPassword.CardTitle = Loc.Get("SecPasswordOptionNone");
             _optNoPassword.CardDescription = Loc.Get("SecPasswordOptionNoneDesc");
-            _optNoPassword.Size = new Size(cardW, 64);
-            _optNoPassword.Location = new Point(4, 8);
+            _optNoPassword.Size = new Size(cardW, 70);
+            _optNoPassword.Location = new Point(4, 4);
             _optNoPassword.Selected = !_enablePassword;
 
             // Option B: Create password
             _optSetPassword = new SelectableOptionCard();
             _optSetPassword.CardTitle = Loc.Get("SecPasswordOptionSet");
             _optSetPassword.CardDescription = Loc.Get("SecPasswordOptionSetDesc");
-            _optSetPassword.Size = new Size(cardW, 64);
-            _optSetPassword.Location = new Point(4, 80);
+            _optSetPassword.Size = new Size(cardW, 70);
+            _optSetPassword.Location = new Point(4, 78);
             _optSetPassword.Selected = _enablePassword;
 
             // Password Inputs Panel
             _pwInputPanel = new Panel();
             _pwInputPanel.Size = new Size(cardW, 168);
-            _pwInputPanel.Location = new Point(4, 152);
+            _pwInputPanel.Location = new Point(4, 154);
             _pwInputPanel.BackColor = Theme.BgCard;
             _pwInputPanel.Visible = _enablePassword;
 
@@ -2640,7 +2668,7 @@ namespace UsbShieldPro
                 Loc.Get("OptBlockPhonesDesc")
             };
 
-            int curY = 6;
+            int curY = 4;
             for (int i = 0; i < 4; i++)
             {
                 int index = i;
@@ -2648,7 +2676,7 @@ namespace UsbShieldPro
                 opt.CardTitle = titles[i];
                 opt.CardDescription = descs[i];
                 if (i == 0) opt.BadgeText = Loc.Get("ModePortableBadge"); // Recommended badge on safest option
-                opt.Size = new Size(cardW, 64);
+                opt.Size = new Size(cardW, 70);
                 opt.Location = new Point(4, curY);
                 opt.Selected = (i == _selectedProtectionIndex);
                 opt.SelectionChanged += delegate
@@ -2664,7 +2692,7 @@ namespace UsbShieldPro
                 };
                 _protectionCards.Add(opt);
                 _stepContent.Controls.Add(opt);
-                curY += 72;
+                curY += 78;
             }
         }
 
