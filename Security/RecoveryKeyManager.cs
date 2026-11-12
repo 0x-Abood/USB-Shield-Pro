@@ -174,9 +174,13 @@ namespace UsbShieldPro.Security
                         try { File.SetAttributes(path, FileAttributes.Normal); } catch { }
                         try { if (File.Exists(bak)) File.SetAttributes(bak, FileAttributes.Normal); } catch { }
 
+                        string oldFile = path + ".old";
+                        try { if (File.Exists(oldFile)) File.Delete(oldFile); } catch { }
+
                         try
                         {
-                            File.Replace(temp, path, bak, true);
+                            File.Replace(temp, path, oldFile, true);
+                            try { if (File.Exists(oldFile)) File.Delete(oldFile); } catch { }
                         }
                         catch
                         {
@@ -392,7 +396,22 @@ namespace UsbShieldPro.Security
                 // on authentication failure, because backup could hold a pre-rotation key.
                 if (IsRecoveryFileIntact(path))
                 {
-                    return VerifyKeyAgainstFile(path, inputKey);
+                    bool valid = VerifyKeyAgainstFile(path, inputKey);
+                    if (valid && !IsRecoveryFileIntact(bak))
+                    {
+                        try
+                        {
+                            if (File.Exists(bak)) { File.SetAttributes(bak, FileAttributes.Normal); }
+                            File.Copy(path, bak, true);
+                            try { File.SetAttributes(bak, FileAttributes.Hidden); } catch { }
+                            if (string.IsNullOrEmpty(SecurityAclHelper.BaseDirectoryOverride))
+                            {
+                                SecurityAclHelper.ApplySensitiveFileSecurity(bak);
+                            }
+                        }
+                        catch { }
+                    }
+                    return valid;
                 }
 
                 // 2. Primary is missing, empty, or corrupted. Fall back to backup verifier only if backup is intact.

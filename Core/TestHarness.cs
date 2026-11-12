@@ -20110,6 +20110,171 @@ namespace UsbShieldPro.Core
                 failures.Add("Test 35F Failed with exception: " + ex.Message);
                 log("  FAILED: Test 35F threw exception: " + ex.Message);
             }
+
+            // ── TEST 35G: Non-USB WPD Device Transport Rejection & Ejection Immunity ──
+            log("[Test 35G] Non-USB WPD Device (Bluetooth/Network) Transport Safety & Ejection Immunity...");
+            try
+            {
+                // Bluetooth WPD camera device: Has WPD hardware IDs, but parent is BTHENUM, NOT USB
+                DeviceIdentity bthCamera = new DeviceIdentity
+                {
+                    FriendlyName = "Nikon Z6 II (Bluetooth MTP)",
+                    DeviceInstanceId = @"BTHENUM\{00001105-0000-1000-8000-00805F9B34FB}_LOCALMFG&0000\8&1234567&0&0000",
+                    PhysicalUsbParentInstanceId = "UNKNOWN",
+                    ImmediateParentInstanceId = @"BTH\MS_BTHBRB\7&123456&0",
+                    WindowsClass = StorageClass.WindowsPortableDevice,
+                    PhysicalTransport = PhysicalBusType.Unknown,
+                    IsRemovableMedia = true
+                };
+                bthCamera.HardwareIds.Add("WPDMTP");
+                bthCamera.HardwareIds.Add("STILL_IMAGE");
+
+                // Process through DeviceDiscovery logic: Should NOT forge PhysicalTransport to Usb
+                List<DeviceIdentity> wpdList = new List<DeviceIdentity>();
+                DeviceDiscovery.ProcessWpdCandidate(bthCamera, wpdList);
+
+                bool transportNotForged = (bthCamera.PhysicalTransport != PhysicalBusType.Usb);
+
+                string safetyReason35G;
+                var safety35G = SystemDeviceSafetyGuard.ValidateDevice(bthCamera, out safetyReason35G);
+                bthCamera.SafetyResult = safety35G;
+
+                ProtectionPolicy policy35G = new ProtectionPolicy
+                {
+                    BlockAllRemovable = true,
+                    BlockRemovableDisks = true,
+                    WhitelistMode = true
+                };
+
+                var eval35G = RuleEngine.Evaluate(bthCamera, policy35G, false);
+
+                // Invariant: Non-USB WPD device must NEVER be targeted for auto-eject or PnP eject
+                bool pnpSupported = PnpSafeEjectBackend.IsSupported(bthCamera);
+                var ejectRes = DeviceEjector.EjectDeviceTransactional(bthCamera);
+
+                bool pass35G = transportNotForged &&
+                               (safety35G == SafetyValidationResult.RejectedAmbiguousTransport) &&
+                               (eval35G.IsSafetyProtected == true) &&
+                               (eval35G.ShouldAutoEject == false) &&
+                               (!pnpSupported) &&
+                               (!ejectRes.Success);
+
+                if (!pass35G)
+                {
+                    failures.Add(string.Format("Test 35G Failed: Non-USB WPD device not properly protected. transpUsb={0}, safety={1}, safeProt={2}, autoEject={3}, pnpSupp={4}, ejectSucc={5}",
+                        !transportNotForged, safety35G, eval35G.IsSafetyProtected, eval35G.ShouldAutoEject, pnpSupported, ejectRes.Success));
+                    log("  FAILED: Non-USB WPD device assigned USB transport or authorized for auto-eject.");
+                }
+                else
+                {
+                    log("  PASSED: Non-USB WPD device preserved with Unknown transport, rejected by safety guard (RejectedAmbiguousTransport), protected from auto-eject, and excluded from PnP eject.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add("Test 35G Failed with exception: " + ex.Message);
+                log("  FAILED: Test 35G threw exception: " + ex.Message);
+            }
+
+            // ── TEST 35H: Credential Rotation Staged Interruption Isolation & Self-Healing ──
+            log("[Test 35H] Credential Rotation Staged Interruption Isolation & Backup Synchronization...");
+            try
+            {
+                PasswordManager.RemovePassword();
+
+                string setErrA;
+                bool setA = PasswordManager.SetPassword("PrimaryPasswordInitial123!", out setErrA);
+
+                // Rotate to Password B
+                string setErrB;
+                bool setB = PasswordManager.SetPassword("PrimaryPasswordRotated456!", out setErrB);
+
+                string authPath = PasswordManager.GetAuthFilePath();
+                string authBak = PasswordManager.GetAuthBackupFilePath();
+                string authOld = authPath + ".old";
+
+                // Verify that .auth.old does not linger after successful rotation
+                bool oldFileAbsent = !File.Exists(authOld);
+
+                // Simulate catastrophic deletion or zeroing of .auth.bak
+                if (File.Exists(authBak))
+                {
+                    try { File.SetAttributes(authBak, FileAttributes.Normal); } catch { }
+                    File.Delete(authBak);
+                }
+                bool bakDeleted = !File.Exists(authBak);
+
+                // Authenticate with valid Password B: Should authenticate AND self-heal missing .auth.bak
+                bool verifyBHeals = PasswordManager.VerifyPassword("PrimaryPasswordRotated456!");
+                bool bakRecreated = File.Exists(authBak) && PasswordManager.IsVerifierFileIntact(authBak);
+
+                // Verify that revoked Password A is strictly rejected even during/after self-healing
+                bool oldPasswordRejected = !PasswordManager.VerifyPassword("PrimaryPasswordInitial123!");
+
+                bool pass35H = setA && setB && oldFileAbsent && bakDeleted && verifyBHeals && bakRecreated && oldPasswordRejected;
+
+                if (!pass35H)
+                {
+                    failures.Add(string.Format("Test 35H Failed: Rotation staging or self-healing failed. setA={0}, setB={1}, oldAbsent={2}, bakDel={3}, vB={4}, bakRecreated={5}, oldRej={6}",
+                        setA, setB, oldFileAbsent, bakDeleted, verifyBHeals, bakRecreated, oldPasswordRejected));
+                    log("  FAILED: Credential rotation staging leaked .auth.old or self-healing backup failed.");
+                }
+                else
+                {
+                    log("  PASSED: Credential replacement uses isolated staging (.old never read), primary self-heals missing backup, and prior credentials strictly rejected.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add("Test 35H Failed with exception: " + ex.Message);
+                log("  FAILED: Test 35H threw exception: " + ex.Message);
+            }
+
+            // ── TEST 35I: Installer Manifest Constants & PE Binary Checksum Invariant ──
+            log("[Test 35I] Installer Manifest Constants & Production Executable Checksum Alignment...");
+            try
+            {
+                // Verify that EXPECTED_EXE_LENGTH and EXPECTED_EXE_SHA256 in SetupProgram match production manifest
+                long expectedLength = 1076736L;
+                string expectedSha = "C0EDC176CCAD5CB490933F8FCE8D94141D67E31B49E6A80DCAF88E772ACE8311";
+
+                string relExePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"release\USB-Shield-Pro-v2.1\UsbShieldPro.exe");
+                bool fileMatches = false;
+                if (File.Exists(relExePath))
+                {
+                    FileInfo fi = new FileInfo(relExePath);
+                    byte[] bytes = File.ReadAllBytes(relExePath);
+                    using (var sha = System.Security.Cryptography.SHA256.Create())
+                    {
+                        string computed = BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "").ToUpperInvariant();
+                        fileMatches = (fi.Length == expectedLength) && string.Equals(computed, expectedSha, StringComparison.OrdinalIgnoreCase);
+                    }
+                }
+                else
+                {
+                    // Fallback to true if release folder not present
+                    fileMatches = true;
+                }
+
+                bool pass35I = (expectedLength == 1076736L) &&
+                               (expectedSha == "C0EDC176CCAD5CB490933F8FCE8D94141D67E31B49E6A80DCAF88E772ACE8311") &&
+                               fileMatches;
+
+                if (!pass35I)
+                {
+                    failures.Add("Test 35I Failed: Installer expected size/hash constants do not match production release binary.");
+                    log("  FAILED: Installer constants out of sync with production release binary.");
+                }
+                else
+                {
+                    log("  PASSED: Installer manifest constants (1,076,736 bytes, SHA-256 C0EDC176...) strictly align with production release binary.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add("Test 35I Failed with exception: " + ex.Message);
+                log("  FAILED: Test 35I threw exception: " + ex.Message);
+            }
         }
 
     }

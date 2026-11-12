@@ -615,7 +615,13 @@ namespace UsbShieldPro.Devices
                     dev.WpdClassification = WpdKind.StorageVolumeProxyUnresolved;
                     dev.WindowsClass = StorageClass.WindowsPortableDevice;
                     dev.SetupClassGuid = "{eec5ad98-8080-425f-922a-dab33962f594}";
-                    dev.PhysicalTransport = PhysicalBusType.Usb;
+
+                    bool isUsb = (!string.IsNullOrEmpty(dev.PhysicalUsbParentInstanceId) &&
+                                  dev.PhysicalUsbParentInstanceId != "UNKNOWN" &&
+                                  dev.PhysicalUsbParentInstanceId.StartsWith(@"USB\", StringComparison.OrdinalIgnoreCase)) ||
+                                 (!string.IsNullOrEmpty(dev.DeviceInstanceId) &&
+                                  dev.DeviceInstanceId.StartsWith(@"USB\", StringComparison.OrdinalIgnoreCase));
+                    dev.PhysicalTransport = isUsb ? PhysicalBusType.Usb : PhysicalBusType.Unknown;
                     dev.IsRemovableMedia = true;
 
                     lock (LastUnresolvedStorageProxies)
@@ -637,7 +643,13 @@ namespace UsbShieldPro.Devices
                 dev.WpdClassification = WpdKind.PortableDevice;
                 dev.WindowsClass = StorageClass.WindowsPortableDevice;
                 dev.SetupClassGuid = "{eec5ad98-8080-425f-922a-dab33962f594}";
-                dev.PhysicalTransport = PhysicalBusType.Usb;
+
+                bool isUsb = (!string.IsNullOrEmpty(dev.PhysicalUsbParentInstanceId) &&
+                              dev.PhysicalUsbParentInstanceId != "UNKNOWN" &&
+                              dev.PhysicalUsbParentInstanceId.StartsWith(@"USB\", StringComparison.OrdinalIgnoreCase)) ||
+                             (!string.IsNullOrEmpty(dev.DeviceInstanceId) &&
+                              dev.DeviceInstanceId.StartsWith(@"USB\", StringComparison.OrdinalIgnoreCase));
+                dev.PhysicalTransport = isUsb ? PhysicalBusType.Usb : PhysicalBusType.Unknown;
                 dev.IsRemovableMedia = true;
 
                 list.Add(dev);
@@ -651,7 +663,13 @@ namespace UsbShieldPro.Devices
             dev.WpdClassification = WpdKind.StorageVolumeProxyUnresolved;
             dev.WindowsClass = StorageClass.WindowsPortableDevice;
             dev.SetupClassGuid = "{eec5ad98-8080-425f-922a-dab33962f594}";
-            dev.PhysicalTransport = PhysicalBusType.Usb;
+
+            bool isAmbiguousUsb = (!string.IsNullOrEmpty(dev.PhysicalUsbParentInstanceId) &&
+                                   dev.PhysicalUsbParentInstanceId != "UNKNOWN" &&
+                                   dev.PhysicalUsbParentInstanceId.StartsWith(@"USB\", StringComparison.OrdinalIgnoreCase)) ||
+                                  (!string.IsNullOrEmpty(dev.DeviceInstanceId) &&
+                                   dev.DeviceInstanceId.StartsWith(@"USB\", StringComparison.OrdinalIgnoreCase));
+            dev.PhysicalTransport = isAmbiguousUsb ? PhysicalBusType.Usb : PhysicalBusType.Unknown;
             dev.IsRemovableMedia = true;
 
             lock (LastUnresolvedStorageProxies)

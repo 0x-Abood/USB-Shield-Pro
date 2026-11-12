@@ -173,11 +173,10 @@ namespace UsbShieldPro.Core
                 return SafetyValidationResult.RejectedInternalBus;
             }
 
-            // 4. Must be confirmed USB or WPD
-            if (device.PhysicalTransport != PhysicalBusType.Usb &&
-                device.WindowsClass != StorageClass.WindowsPortableDevice)
+            // 4. Must be confirmed USB bus transport
+            if (device.PhysicalTransport != PhysicalBusType.Usb)
             {
-                reason = "Non-USB transport (" + device.PhysicalTransport + ") rejected by fail-open policy.";
+                reason = "Non-USB transport (" + device.PhysicalTransport + ") rejected by safety guard.";
                 return SafetyValidationResult.RejectedAmbiguousTransport;
             }
 

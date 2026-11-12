@@ -33,8 +33,8 @@ namespace UsbShieldPro.Installer
 {
     internal static class Program
     {
-        public const string EXPECTED_EXE_SHA256 = "4F9A904E9AB5236C18D298DD78443D5021DB5781BFCF16C0C037100DFEC5AFA9";
-        public const long EXPECTED_EXE_LENGTH = 1060864L;
+        public const string EXPECTED_EXE_SHA256 = "C0EDC176CCAD5CB490933F8FCE8D94141D67E31B49E6A80DCAF88E772ACE8311";
+        public const long EXPECTED_EXE_LENGTH = 1076736L;
 
         public const string APP_NAME = "USB Shield Pro";
         public const string APP_VERSION = "2.1.0";
@@ -227,7 +227,7 @@ namespace UsbShieldPro.Installer
                     if (sc.Status != ServiceControllerStatus.Stopped)
                     {
                         sc.Stop();
-                        sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(3));
+                        sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(7));
                     }
                 }
             }
@@ -363,7 +363,25 @@ namespace UsbShieldPro.Installer
                         return false;
                     }
 
-                    File.WriteAllBytes(destExe, data);
+                    try
+                    {
+                        File.WriteAllBytes(destExe, data);
+                    }
+                    catch (IOException)
+                    {
+                        // Resilient file overwrite for existing running process/lock
+                        string oldExe = destExe + ".old";
+                        try { if (File.Exists(oldExe)) File.Delete(oldExe); } catch { }
+                        try
+                        {
+                            File.Move(destExe, oldExe);
+                            File.WriteAllBytes(destExe, data);
+                        }
+                        catch
+                        {
+                            throw;
+                        }
+                    }
                 }
 
                 // Step 4: Extract Config & Readme
@@ -537,7 +555,7 @@ namespace UsbShieldPro.Installer
                     if (sc.Status != ServiceControllerStatus.Stopped)
                     {
                         sc.Stop();
-                        sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(3));
+                        sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(7));
                     }
                 }
             }

@@ -94,7 +94,7 @@ namespace UsbShieldPro.Core
                     result.DisplayBadge = "STRICT PNP INSTALLATION CONTROL";
                     result.EvaluationReason = "Device rejected under Strict PnP Installation Control.";
                     result.RecommendedAction = RuleAction.DenyBlocked;
-                    result.ShouldAutoEject = true;
+                    result.ShouldAutoEject = (device.WindowsClass != StorageClass.WindowsPortableDevice);
                     return result;
                 }
 
@@ -103,7 +103,7 @@ namespace UsbShieldPro.Core
                     result.DisplayBadge = "TRUSTED-ONLY — AUTO-EJECT";
                     result.EvaluationReason = "Unauthorized storage device connected while Normal Trusted-Only Mode is active.";
                     result.RecommendedAction = RuleAction.DenyBlocked;
-                    result.ShouldAutoEject = true;
+                    result.ShouldAutoEject = (device.WindowsClass != StorageClass.WindowsPortableDevice);
                     return result;
                 }
             }

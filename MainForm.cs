@@ -2448,7 +2448,7 @@ namespace UsbShieldPro
 
                 foreach (var dev in devices)
                 {
-                    if ((dev.PhysicalTransport == PhysicalBusType.Usb || dev.WindowsClass == StorageClass.WindowsPortableDevice) &&
+                    if (dev.PhysicalTransport == PhysicalBusType.Usb && dev.WindowsClass == StorageClass.DiskDrive &&
                         dev.Category != DeviceCategory.InternalFixedDisk && dev.Category != DeviceCategory.CriticalSystemHardware)
                     {
                         string guardReason;
