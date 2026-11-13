@@ -3131,15 +3131,49 @@ namespace UsbShieldPro
 
     public class ActivityRecord
     {
+        private Color? _badgeColor;
+
+        public string Id { get; set; }
         public DateTime Timestamp { get; set; }
         public string Title { get; set; }
         public string Context { get; set; }
         public ActivityCategory Category { get; set; }
         public string ResultBadge { get; set; }
-        public Color BadgeColor { get; set; }
+        public string BadgeColorHex { get; set; }
+
+        [System.Web.Script.Serialization.ScriptIgnore]
+        public Color BadgeColor
+        {
+            get
+            {
+                if (_badgeColor.HasValue) return _badgeColor.Value;
+                if (!string.IsNullOrEmpty(BadgeColorHex))
+                {
+                    try { return ColorTranslator.FromHtml(BadgeColorHex); } catch { }
+                }
+                return Theme.AccentBlue;
+            }
+            set
+            {
+                _badgeColor = value;
+                try { BadgeColorHex = ColorTranslator.ToHtml(value); } catch { BadgeColorHex = "#2563EB"; }
+            }
+        }
+
+        public ActivityRecord()
+        {
+            Id = Guid.NewGuid().ToString("N");
+            Timestamp = DateTime.Now;
+            Title = "";
+            Context = "";
+            Category = ActivityCategory.Devices;
+            ResultBadge = "";
+            BadgeColor = Theme.AccentBlue;
+        }
 
         public ActivityRecord(DateTime time, string title, string context, ActivityCategory category, string badge = "", Color? badgeColor = null)
         {
+            Id = Guid.NewGuid().ToString("N");
             Timestamp = time;
             Title = title ?? "";
             Context = context ?? "";
@@ -3150,6 +3184,7 @@ namespace UsbShieldPro
 
         public ActivityRecord(DateTime time, string title, ActivityCategory category, string badge, Color? badgeColor, string context = "")
         {
+            Id = Guid.NewGuid().ToString("N");
             Timestamp = time;
             Title = title ?? "";
             Context = context ?? "";

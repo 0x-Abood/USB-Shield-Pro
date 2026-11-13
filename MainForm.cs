@@ -237,6 +237,7 @@ namespace UsbShieldPro
         private List<ActivityRow> _activeActivityRows = new List<ActivityRow>();
         private ActivityRecord _selectedActivityRecord;
         private List<ActivityRecord> _activityRecords = new List<ActivityRecord>();
+        private DateTime _lastActivitySyncUtc = DateTime.MinValue;
 
         // Isolated test-only properties (zero disk writes, purely in-memory for testing/captures)
         public List<DeviceRule> TestIsolatedWhitelistRules { get; set; }
@@ -433,6 +434,21 @@ namespace UsbShieldPro
             BuildUI();
 
             ThemeManager.ThemeChanged += OnThemeChanged;
+
+            // Load persistent activity records from disk store on startup
+            if (TestIsolatedActivityRecords == null)
+            {
+                try
+                {
+                    _activityRecords = ActivityRepository.Load();
+                    _lastActivitySyncUtc = ActivityRepository.GetLastWriteUtc();
+                    if (_recentActivityPanel != null)
+                    {
+                        _recentActivityPanel.SetRecords(_activityRecords, Loc.IsRtl);
+                    }
+                }
+                catch { }
+            }
 
             if (!IsCaptureMode)
             {
@@ -3966,11 +3982,25 @@ namespace UsbShieldPro
             {
                 if (MsgBox.Show(this, Loc.Get("ClearActivityConfirmMsg"), Loc.Get("ClearActivityConfirmTitle"), MessageBoxButtons.YesNo) == DialogResult.Yes)
                 {
+                    if (!IsCaptureMode && TestIsolatedActivityRecords == null)
+                    {
+                        try
+                        {
+                            string clearErr;
+                            ActivityRepository.Clear(out clearErr);
+                            _lastActivitySyncUtc = ActivityRepository.GetLastWriteUtc();
+                        }
+                        catch { }
+                    }
                     _activityRecords.Clear();
                     if (TestIsolatedActivityRecords != null) TestIsolatedActivityRecords.Clear();
                     _selectedActivityRecord = null;
                     if (_activityDrawer != null) _activityDrawer.CloseDrawer();
                     RefreshActivityView();
+                    if (_recentActivityPanel != null)
+                    {
+                        _recentActivityPanel.SetRecords(_activityRecords, Loc.IsRtl);
+                    }
                 }
             };
 
@@ -4267,6 +4297,25 @@ namespace UsbShieldPro
         private void RefreshActivityView()
         {
             if (_activityScroll == null || _activityScroll.ContentPanel == null) return;
+
+            if (!IsCaptureMode && TestIsolatedActivityRecords == null)
+            {
+                try
+                {
+                    DateTime diskWrite = ActivityRepository.GetLastWriteUtc();
+                    if (diskWrite > _lastActivitySyncUtc)
+                    {
+                        _activityRecords = ActivityRepository.Load();
+                        _lastActivitySyncUtc = diskWrite;
+                        if (_recentActivityPanel != null)
+                        {
+                            _recentActivityPanel.SetRecords(_activityRecords, Loc.IsRtl);
+                        }
+                    }
+                }
+                catch { }
+            }
+
             _activityScroll.ContentPanel.SuspendLayout();
             UiDrawingUtils.ClearAndDisposeControls(_activityScroll.ContentPanel.Controls, _activityEmptyState);
             _activeActivityRows.Clear();
@@ -4549,6 +4598,16 @@ namespace UsbShieldPro
         {
             ActivityRecord rec = new ActivityRecord(DateTime.Now, title, cat, badge, badgeColor, context);
             _activityRecords.Insert(0, rec);
+            if (!IsCaptureMode && TestIsolatedActivityRecords == null)
+            {
+                try
+                {
+                    string saveErr;
+                    ActivityRepository.AppendRecord(rec, out saveErr);
+                    _lastActivitySyncUtc = ActivityRepository.GetLastWriteUtc();
+                }
+                catch { }
+            }
             if (_activityScroll != null)
             {
                 if (InvokeRequired)
@@ -5832,6 +5891,30 @@ namespace UsbShieldPro
                     }
                 }
             }
+
+            // 3. Activity repository sync (detect records written by Service in Session 0)
+            if (!IsCaptureMode && TestIsolatedActivityRecords == null)
+            {
+                try
+                {
+                    DateTime diskWrite = ActivityRepository.GetLastWriteUtc();
+                    if (diskWrite > _lastActivitySyncUtc)
+                    {
+                        _activityRecords = ActivityRepository.Load();
+                        _lastActivitySyncUtc = diskWrite;
+                        if (_recentActivityPanel != null)
+                        {
+                            List<ActivityRecord> sourceRecords = TestIsolatedActivityRecords != null ? TestIsolatedActivityRecords : _activityRecords;
+                            _recentActivityPanel.SetRecords(sourceRecords, Loc.IsRtl);
+                        }
+                        if (_sidebar != null && _sidebar.SelectedIndex == 4)
+                        {
+                            RefreshActivityView();
+                        }
+                    }
+                }
+                catch { }
+            }
         }
 
         private static int _pnpPendingGeneration = 0;
@@ -5939,6 +6022,29 @@ namespace UsbShieldPro
                                 RefreshDevicesList();
                             }
                             RefreshLiveStatus();
+
+                            // Synchronize activity log immediately following hardware events
+                            if (!IsCaptureMode && TestIsolatedActivityRecords == null)
+                            {
+                                try
+                                {
+                                    DateTime diskWrite = ActivityRepository.GetLastWriteUtc();
+                                    if (diskWrite > _lastActivitySyncUtc)
+                                    {
+                                        _activityRecords = ActivityRepository.Load();
+                                        _lastActivitySyncUtc = diskWrite;
+                                        if (_recentActivityPanel != null)
+                                        {
+                                            _recentActivityPanel.SetRecords(_activityRecords, Loc.IsRtl);
+                                        }
+                                        if (_sidebar != null && _sidebar.SelectedIndex == 4)
+                                        {
+                                            RefreshActivityView();
+                                        }
+                                    }
+                                }
+                                catch { }
+                            }
                         }));
                     }
                     catch { }

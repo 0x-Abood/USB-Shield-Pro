@@ -538,6 +538,45 @@ namespace UsbShieldPro.Devices
                     LatencyTracker.StoreArrivalRecord(trustedRec);
 
                     LogTrace(trustedRec.FormatReport());
+
+                    if (s0Ticks > 0 && TrustedDeviceRepository.IsDeviceTrusted(dev))
+                    {
+                        try
+                        {
+                            string allowText = string.Format(Loc.Get("EventDeviceAllowed"), dev.FriendlyName);
+                            ActivityRepository.AppendRecord(new ActivityRecord(
+                                DateTime.Now,
+                                allowText,
+                                ActivityCategory.DeviceEvents,
+                                Loc.Get("BadgeVerified"),
+                                Theme.AccentGreen,
+                                dev.DeviceInstanceId));
+                        }
+                        catch { }
+                    }
+                }
+                else if (eval.RecommendedAction == RuleAction.DenyBlocked && !eval.ShouldAutoEject)
+                {
+                    long s0Ticks = (pendingS0 > 0) ? LatencyTracker.GetLastPnpArrivalTicks(consume: true) : 0;
+                    if (s0Ticks > 0) outcome.S0Consumed = true;
+                    pendingS0 = 0;
+                    outcome.ActionsExecuted++;
+
+                    if (s0Ticks > 0)
+                    {
+                        try
+                        {
+                            string blockText = string.Format("Access denied: '{0}' blocked by policy.", dev.FriendlyName);
+                            ActivityRepository.AppendRecord(new ActivityRecord(
+                                DateTime.Now,
+                                blockText,
+                                ActivityCategory.Protection,
+                                Loc.Get("BadgeBlocked"),
+                                Theme.AccentOrange,
+                                eval.EvaluationReason ?? dev.DeviceInstanceId));
+                        }
+                        catch { }
+                    }
                 }
             }
 
