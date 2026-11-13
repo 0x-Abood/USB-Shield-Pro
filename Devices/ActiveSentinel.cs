@@ -5,6 +5,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using UsbShieldPro.Core;
@@ -468,6 +469,21 @@ namespace UsbShieldPro.Devices
 
             foreach (var dev in devices)
             {
+                // System/Internal disk safety guard: Never correlate PnP arrival timestamp to internal Disk 0
+                bool isInternalOrSystemDisk = dev.PhysicalDiskNumber == 0 ||
+                    (dev.PhysicalTransport != PhysicalBusType.Usb && dev.WindowsClass != StorageClass.WindowsPortableDevice);
+
+                if (isInternalOrSystemDisk)
+                {
+                    // Internal system disks are safety protected and must never consume external PnP arrival S0
+                    continue;
+                }
+
+                // Register device presence with lifecycle manager to track generations
+                bool isNewArrival;
+                DeviceLifecycleRecord lifecycleRec;
+                DeviceEnforcementLifecycleManager.RegisterDevicePresence(dev, out lifecycleRec, out isNewArrival);
+
                 // Check if device is already suppressed (e.g. EjectedUntilRemoval, Evaluating, etc.)
                 string suppressReason;
                 if (DeviceEnforcementLifecycleManager.ShouldSuppressEnforcement(dev, currentPolicy, out suppressReason))
@@ -479,14 +495,8 @@ namespace UsbShieldPro.Devices
                 DeviceEvaluationResult eval = RuleEngine.Evaluate(dev, currentPolicy, isTemporaryAccessActive);
                 long s3Done = System.Diagnostics.Stopwatch.GetTimestamp();
 
-                // System/Internal disk safety guard: Never correlate PnP arrival timestamp to internal Disk 0
-                bool isInternalOrSystemDisk = eval.IsSafetyProtected ||
-                    dev.PhysicalDiskNumber == 0 ||
-                    (dev.PhysicalTransport != PhysicalBusType.Usb && dev.WindowsClass != StorageClass.WindowsPortableDevice);
-
-                if (isInternalOrSystemDisk)
+                if (eval.IsSafetyProtected)
                 {
-                    // Internal system disks are safety protected and must never consume external PnP arrival S0
                     continue;
                 }
 
@@ -512,6 +522,7 @@ namespace UsbShieldPro.Devices
                     {
                         outcome.ActionsExecuted++;
                     }
+                    if (lifecycleRec != null) lifecycleRec.ArrivalLogged = true;
                 }
                 else if (eval.RecommendedAction == RuleAction.AllowTrusted)
                 {
@@ -539,20 +550,50 @@ namespace UsbShieldPro.Devices
 
                     LogTrace(trustedRec.FormatReport());
 
-                    if (s0Ticks > 0 && TrustedDeviceRepository.IsDeviceTrusted(dev))
+                    bool isTrusted = TrustedDeviceRepository.IsDeviceTrusted(dev);
+                    if (isTrusted)
                     {
-                        try
+                        bool shouldLogArrival = (lifecycleRec == null || !lifecycleRec.ArrivalLogged);
+                        DeviceEnforcementLifecycleManager.RecordAllowedTrusted(dev);
+                        if (shouldLogArrival)
                         {
-                            string allowText = string.Format(Loc.Get("EventDeviceAllowed"), dev.FriendlyName);
-                            ActivityRepository.AppendRecord(new ActivityRecord(
-                                DateTime.Now,
-                                allowText,
-                                ActivityCategory.DeviceEvents,
-                                Loc.Get("BadgeVerified"),
-                                Theme.AccentGreen,
-                                dev.DeviceInstanceId));
+                            try
+                            {
+                                string allowText = string.Format(Loc.Get("EventDeviceAllowed"), dev.FriendlyName);
+                                ActivityRepository.AppendRecord(new ActivityRecord(
+                                    DateTime.Now,
+                                    allowText,
+                                    ActivityCategory.DeviceEvents,
+                                    Loc.Get("BadgeVerified"),
+                                    Theme.AccentGreen,
+                                    dev.DeviceInstanceId ?? dev.SerialNumber));
+                            }
+                            catch { }
                         }
-                        catch { }
+                    }
+                    else
+                    {
+                        // Protection is disabled or device is unrestricted
+                        if (lifecycleRec != null)
+                        {
+                            DeviceEnforcementLifecycleManager.TransitionState(lifecycleRec.PhysicalKey, lifecycleRec.GenerationId, lifecycleRec.EnforcementCycleId, EnforcementState.SuspendedPolicyOff);
+                        }
+                        if (lifecycleRec == null || !lifecycleRec.ArrivalLogged)
+                        {
+                            if (lifecycleRec != null) lifecycleRec.ArrivalLogged = true;
+                            try
+                            {
+                                string connectText = string.Format(Loc.Get("EventDeviceConnected"), dev.FriendlyName);
+                                ActivityRepository.AppendRecord(new ActivityRecord(
+                                    DateTime.Now,
+                                    connectText,
+                                    ActivityCategory.DeviceEvents,
+                                    Loc.Get("BadgeConnected"),
+                                    Theme.AccentBlue,
+                                    dev.DeviceInstanceId ?? dev.SerialNumber));
+                            }
+                            catch { }
+                        }
                     }
                 }
                 else if (eval.RecommendedAction == RuleAction.DenyBlocked && !eval.ShouldAutoEject)
@@ -562,18 +603,33 @@ namespace UsbShieldPro.Devices
                     pendingS0 = 0;
                     outcome.ActionsExecuted++;
 
-                    if (s0Ticks > 0)
+                    if (lifecycleRec == null || !lifecycleRec.ArrivalLogged)
                     {
+                        if (lifecycleRec != null) lifecycleRec.ArrivalLogged = true;
                         try
                         {
-                            string blockText = string.Format("Access denied: '{0}' blocked by policy.", dev.FriendlyName);
-                            ActivityRepository.AppendRecord(new ActivityRecord(
-                                DateTime.Now,
-                                blockText,
-                                ActivityCategory.Protection,
-                                Loc.Get("BadgeBlocked"),
-                                Theme.AccentOrange,
-                                eval.EvaluationReason ?? dev.DeviceInstanceId));
+                            if (eval.RecommendedAction == RuleAction.ReadOnly)
+                            {
+                                string roText = string.Format("Removable storage '{0}' write-protected (Read-Only).", dev.FriendlyName);
+                                ActivityRepository.AppendRecord(new ActivityRecord(
+                                    DateTime.Now,
+                                    roText,
+                                    ActivityCategory.Protection,
+                                    Loc.Get("BadgeReadOnly"),
+                                    Theme.AccentOrange,
+                                    eval.EvaluationReason ?? dev.DeviceInstanceId));
+                            }
+                            else
+                            {
+                                string blockText = string.Format("Access denied: '{0}' blocked by policy.", dev.FriendlyName);
+                                ActivityRepository.AppendRecord(new ActivityRecord(
+                                    DateTime.Now,
+                                    blockText,
+                                    ActivityCategory.Protection,
+                                    Loc.Get("BadgeBlocked"),
+                                    Theme.AccentOrange,
+                                    eval.EvaluationReason ?? dev.DeviceInstanceId));
+                            }
                         }
                         catch { }
                     }
@@ -1099,6 +1155,21 @@ namespace UsbShieldPro.Devices
 
         private static void EmitNotification(DeviceIdentity dev, bool success, string msg)
         {
+            try
+            {
+                string name = (dev != null && !string.IsNullOrEmpty(dev.FriendlyName)) ? dev.FriendlyName : "USB Storage";
+                string formatKey = success ? "SafeEjectSuccessStatus" : "SafeEjectFailedStatus";
+                string statusText = Loc.Get(formatKey);
+                string activityText = MainForm.FormatActivityLogMessage(string.Format("{0}: {1}", name, statusText), msg, success);
+                ActivityCategory cat = success ? ActivityCategory.DeviceEvents : ActivityCategory.Errors;
+                string badge = success ? Loc.Get("BadgeSuccess") : Loc.Get("BadgeFailed");
+                Color color = success ? Theme.AccentGreen : Theme.AccentRed;
+                string context = !string.IsNullOrEmpty(msg) ? msg : name;
+
+                ActivityRepository.AppendRecord(new ActivityRecord(DateTime.Now, activityText, cat, badge, color, context));
+            }
+            catch { }
+
             if (DeviceEnforcementLifecycleManager.IsTestMode && DeviceEnforcementLifecycleManager.NotificationSinkSeam != null)
             {
                 DeviceEnforcementLifecycleManager.NotificationSinkSeam(dev, success, msg);

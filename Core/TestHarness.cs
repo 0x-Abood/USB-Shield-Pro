@@ -607,6 +607,9 @@ namespace UsbShieldPro.Core
 
                 // ── TEST 36: v2.1 Phase 6.5 Persistent Cross-Process Activity Logging Regression Suite
                 RunPhase65PersistentActivityLoggingTests(log, failures);
+
+                // ── TEST 37: v2.1 Phase 6.6 Complete Activity Event Coverage Regression Suite
+                RunPhase66CompleteActivityEventCoverageTests(log, failures);
             }
             finally
             {
@@ -643,8 +646,8 @@ namespace UsbShieldPro.Core
             log("================================================================================");
             log("  REGRESSION TEST HARNESS EXECUTION SUMMARY");
             log("================================================================================");
-            log(string.Format("  SUITES TOTAL:       {0}", 30));
-            log(string.Format("  SUITES PASS:        {0}", failures.Count == 0 ? 30 : (30 - (failures.Count > 0 ? 1 : 0))));
+            log(string.Format("  SUITES TOTAL:       {0}", 31));
+            log(string.Format("  SUITES PASS:        {0}", failures.Count == 0 ? 31 : (31 - (failures.Count > 0 ? 1 : 0))));
             log(string.Format("  ASSERTIONS TOTAL:   {0}", totalAssertions));
             log(string.Format("  ASSERTIONS PASS:    {0}", totalPassed));
             log(string.Format("  ASSERTIONS FAIL:    {0}", failures.Count));
@@ -653,7 +656,7 @@ namespace UsbShieldPro.Core
             log("");
             if (failures.Count == 0)
             {
-                log("ALL 30 ISOLATED RECOVERY, LIFECYCLE, PERSISTENCE, THEME/DPI, SHELL, DASHBOARD, DEVICES, PROTECTION, TRUSTED DEVICES, ACTIVITY, RECOVERY, SETTINGS, UI REMEDIATION, IDENTITY MATCHING, STORAGE ENFORCEMENT, ENFORCEMENT OWNERSHIP, TEMPORARY ACCESS, RECOVERY JOURNAL, DURABLE SETTINGS, AUTHENTICATION INTEGRITY, CORE USB ENFORCEMENT, REAL ENFORCEMENT READINESS, STAGE 2, STAGE 3, UPDATE NOTIFIER, SECURITY CORRECTIONS & PERSISTENT ACTIVITY LOGGING REGRESSION TEST SUITES PASSED SUCCESSFULLY.");
+                log("ALL 31 ISOLATED RECOVERY, LIFECYCLE, PERSISTENCE, THEME/DPI, SHELL, DASHBOARD, DEVICES, PROTECTION, TRUSTED DEVICES, ACTIVITY, RECOVERY, SETTINGS, UI REMEDIATION, IDENTITY MATCHING, STORAGE ENFORCEMENT, ENFORCEMENT OWNERSHIP, TEMPORARY ACCESS, RECOVERY JOURNAL, DURABLE SETTINGS, AUTHENTICATION INTEGRITY, CORE USB ENFORCEMENT, REAL ENFORCEMENT READINESS, STAGE 2, STAGE 3, UPDATE NOTIFIER, SECURITY CORRECTIONS, PERSISTENT ACTIVITY LOGGING & COMPLETE ACTIVITY EVENT COVERAGE REGRESSION TEST SUITES PASSED SUCCESSFULLY.");
                 return true;
             }
             else
@@ -20966,6 +20969,459 @@ namespace UsbShieldPro.Core
             }
             finally
             {
+                try { if (Directory.Exists(testDir)) Directory.Delete(testDir, true); } catch { }
+            }
+        }
+
+        // ===============================================================================
+        // [Test 37] v2.1 Phase 6.6 Complete Activity Event Coverage Regression Suite
+        // Permanent Regression Suite for Physical PnP Arrival, Removal, Auto-Eject,
+        // Trusted Authorization, Eject Failure, Multi-Partition Deduplication,
+        // Headless Session 0 Service Logging, and GUI Historical Visibility
+        // ===============================================================================
+        public static void RunPhase66CompleteActivityEventCoverageTests(Action<string> log, List<string> failures)
+        {
+            log("");
+            log("================================================================================");
+            log("  [Test 37] v2.1 Phase 6.6 Complete Activity Event Coverage Suite");
+            log("  Verifying Physical Device Arrival, Removal, Auto-Eject, Trusted Authorization,");
+            log("  Eject Failure, Multi-Partition Deduplication, and Session 0/1 Parity");
+            log("================================================================================");
+
+            string testDir = Path.Combine(Path.GetTempPath(), "UsbShield_Test37_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(testDir);
+
+            try
+            {
+                using (ActivityRepository.CreateTestScope(testDir))
+                {
+                    DeviceEnforcementLifecycleManager.ResetForTest();
+                    DeviceDiscovery.ResetSeams();
+                    TrustedDeviceRepository.IsDeviceTrustedSeam = null;
+                    string clearErr;
+                    ActivityRepository.Clear(out clearErr);
+
+                    // ── TEST 37A: Device Arrival With Protection Disabled ──
+                    log("[Test 37A] Device Arrival With Protection Disabled (EventDeviceConnected + BadgeConnected)...");
+                    try
+                    {
+                        var dev37A = new DeviceIdentity
+                        {
+                            FriendlyName = "Kingston DataTraveler 3.0",
+                            DeviceInstanceId = @"USB\VID_0951&PID_1666\SER_37A",
+                            PhysicalUsbParentInstanceId = @"USB\VID_0951&PID_1666\SER_37A_PARENT",
+                            SerialNumber = "SER_37A",
+                            PhysicalDiskNumber = 1,
+                            PhysicalTransport = PhysicalBusType.Usb,
+                            WindowsClass = StorageClass.DiskDrive,
+                            VolumeMountings = new List<string> { "E:" },
+                            SafetyResult = SafetyValidationResult.Passed,
+                            IsRemovableMedia = true
+                        };
+
+                        bool isPresent37 = true;
+                        DeviceEnforcementLifecycleManager.PhysicalPresenceSeam = anchor => isPresent37;
+                        DeviceDiscovery.RawDiskCandidatesSeam = () => isPresent37 ? new List<DeviceIdentity> { dev37A } : new List<DeviceIdentity>();
+                        DeviceDiscovery.RawWpdCandidatesSeam = () => new List<DeviceIdentity>();
+
+                        var policyDisabled = new ProtectionPolicy
+                        {
+                            BlockAllRemovable = false,
+                            BlockRemovableDisks = false,
+                            BlockFlashDrivesOnlyReactive = false,
+                            BlockWpdPhonesAndMedia = false,
+                            ReadOnlyRemovable = false,
+                            HardBlockUsbStor = false,
+                            WhitelistMode = false
+                        };
+
+                        ActiveSentinel.EvaluateAndEnforceConnectedDevices(policyDisabled, false);
+
+                        List<ActivityRecord> recs37A = ActivityRepository.Load();
+                        bool pass37A = recs37A != null && recs37A.Count == 1 &&
+                                       recs37A[0].Title.Contains("Kingston DataTraveler") &&
+                                       recs37A[0].ResultBadge == Loc.Get("BadgeConnected");
+
+                        if (!pass37A)
+                        {
+                            failures.Add(string.Format("Test 37A Failed: Connection while disabled not recorded. count={0}",
+                                recs37A != null ? recs37A.Count : -1));
+                            log("  FAILED: Arrival with protection disabled was not logged to ActivityRepository.");
+                        }
+                        else
+                        {
+                            log("  PASSED: Device arrival while protection is disabled successfully recorded with BadgeConnected.");
+                        }
+
+                        // ── TEST 37B: Device Removal Recording ──
+                        log("[Test 37B] Device Removal Recording (EventDeviceDisconnected + BadgeDisconnected)...");
+                        isPresent37 = false;
+                        ActiveSentinel.EvaluateAndEnforceConnectedDevices(policyDisabled, false);
+
+                        List<ActivityRecord> recs37B = ActivityRepository.Load();
+                        bool pass37B = recs37B != null && recs37B.Count == 2 &&
+                                       recs37B[0].Title.Contains("Kingston DataTraveler") &&
+                                       recs37B[0].ResultBadge == Loc.Get("BadgeDisconnected");
+
+                        if (!pass37B)
+                        {
+                            failures.Add(string.Format("Test 37B Failed: Disconnection event not recorded. count={0}",
+                                recs37B != null ? recs37B.Count : -1));
+                            log("  FAILED: Device removal was not logged to ActivityRepository.");
+                        }
+                        else
+                        {
+                            log("  PASSED: Device removal successfully recorded with BadgeDisconnected.");
+                        }
+
+                        // ── TEST 37C: Unknown Device Arrival With Active Protection (Auto-Eject) ──
+                        log("[Test 37C] Unknown Device Arrival With Active Protection (BadgeReactiveAutoEject + SafeEjectSuccessStatus)...");
+                        ActivityRepository.Clear(out clearErr);
+
+                        var dev37C = new DeviceIdentity
+                        {
+                            FriendlyName = "SanDisk Cruzer Blade",
+                            DeviceInstanceId = @"USB\VID_0781&PID_5567\SER_37C",
+                            PhysicalUsbParentInstanceId = @"USB\VID_0781&PID_5567\SER_37C_PARENT",
+                            SerialNumber = "SER_37C",
+                            PhysicalDiskNumber = 2,
+                            PhysicalTransport = PhysicalBusType.Usb,
+                            WindowsClass = StorageClass.DiskDrive,
+                            VolumeMountings = new List<string> { "F:" },
+                            SafetyResult = SafetyValidationResult.Passed,
+                            IsRemovableMedia = true
+                        };
+
+                        var policyActive = new ProtectionPolicy
+                        {
+                            BlockAllRemovable = false,
+                            BlockRemovableDisks = false,
+                            BlockFlashDrivesOnlyReactive = false,
+                            BlockWpdPhonesAndMedia = false,
+                            ReadOnlyRemovable = false,
+                            HardBlockUsbStor = false,
+                            WhitelistMode = true
+                        };
+
+                        bool isPresent37C = true;
+                        DeviceEnforcementLifecycleManager.PhysicalPresenceSeam = anchor => isPresent37C;
+                        DeviceDiscovery.RawDiskCandidatesSeam = () => isPresent37C ? new List<DeviceIdentity> { dev37C } : new List<DeviceIdentity>();
+                        DeviceEnforcementLifecycleManager.EjectExecutionSeam = (d, lat) => DeviceEjectResult.Success;
+
+                        ActiveSentinel.EvaluateAndEnforceConnectedDevices(policyActive, false);
+
+                        List<ActivityRecord> recs37C = ActivityRepository.Load();
+                        bool pass37C = recs37C != null && recs37C.Count == 1 &&
+                                       recs37C[0].Title.Contains(Loc.Get("SafeEjectSuccessStatus")) &&
+                                       recs37C[0].ResultBadge == Loc.Get("BadgeSuccess");
+
+                        if (!pass37C)
+                        {
+                            failures.Add(string.Format("Test 37C Failed: Auto-eject action not recorded. count={0}",
+                                recs37C != null ? recs37C.Count : -1));
+                            log("  FAILED: Auto-eject event not recorded upon unknown device arrival.");
+                        }
+                        else
+                        {
+                            log("  PASSED: Unknown device reactive auto-ejection successfully recorded with SafeEjectSuccessStatus.");
+                        }
+
+                        // ── TEST 37D: Disconnect and Reconnect Same Device (Generation Re-Enforcement) ──
+                        log("[Test 37D] Disconnect and Reconnect Same Device (Generation Increment & Distinct Events)...");
+                        // 1. Unplug the ejected device
+                        isPresent37C = false;
+                        ActiveSentinel.EvaluateAndEnforceConnectedDevices(policyActive, false);
+
+                        List<ActivityRecord> recs37D1 = ActivityRepository.Load();
+                        bool unpluggedRecorded = recs37D1 != null && recs37D1.Count == 2 &&
+                                                 recs37D1[0].ResultBadge == Loc.Get("BadgeRemoved");
+
+                        // 2. Re-plug the exact same device (new physical arrival generation)
+                        isPresent37C = true;
+                        ActiveSentinel.EvaluateAndEnforceConnectedDevices(policyActive, false);
+
+                        List<ActivityRecord> recs37D2 = ActivityRepository.Load();
+                        bool reEnforcedRecorded = recs37D2 != null && recs37D2.Count == 3 &&
+                                                  recs37D2[0].ResultBadge == Loc.Get("BadgeSuccess") &&
+                                                  recs37D2[0].Title.Contains(Loc.Get("SafeEjectSuccessStatus"));
+
+                        bool pass37D = unpluggedRecorded && reEnforcedRecorded;
+                        if (!pass37D)
+                        {
+                            failures.Add(string.Format("Test 37D Failed: Reconnect lifecycle suppressed. unpluggedRecorded={0}, reEnforced={1}, total={2}",
+                                unpluggedRecorded, reEnforcedRecorded, recs37D2 != null ? recs37D2.Count : -1));
+                            log("  FAILED: Reconnected device was suppressed or failed to trigger new generation enforcement.");
+                        }
+                        else
+                        {
+                            log("  PASSED: Physical disconnect and reconnect accurately incremented generation and generated distinct events across full lifecycle.");
+                        }
+
+                        // ── TEST 37E: Trusted Device Arrival With Protection Active ──
+                        log("[Test 37E] Trusted Device Arrival With Protection Active (EventDeviceAllowed + BadgeVerified)...");
+                        ActivityRepository.Clear(out clearErr);
+
+                        var dev37E = new DeviceIdentity
+                        {
+                            FriendlyName = "Samsung BAR Plus",
+                            DeviceInstanceId = @"USB\VID_04E8&PID_1234\037E99A841B52F81",
+                            PhysicalUsbParentInstanceId = @"USB\VID_04E8&PID_1234\037E99A841B52F81_PARENT",
+                            SerialNumber = "037E99A841B52F81",
+                            PhysicalDiskNumber = 3,
+                            PhysicalTransport = PhysicalBusType.Usb,
+                            WindowsClass = StorageClass.DiskDrive,
+                            VolumeMountings = new List<string> { "G:" },
+                            SafetyResult = SafetyValidationResult.Passed,
+                            IsRemovableMedia = true
+                        };
+
+                        bool isPresent37E = true;
+                        DeviceEnforcementLifecycleManager.PhysicalPresenceSeam = anchor => isPresent37E;
+                        DeviceDiscovery.RawDiskCandidatesSeam = () => isPresent37E ? new List<DeviceIdentity> { dev37E } : new List<DeviceIdentity>();
+                        TrustedDeviceRepository.IsDeviceTrustedSeam = d => (d != null && d.SerialNumber == "037E99A841B52F81");
+
+                        ActiveSentinel.EvaluateAndEnforceConnectedDevices(policyActive, false);
+
+                        List<ActivityRecord> recs37E = ActivityRepository.Load();
+                        bool pass37E = recs37E != null && recs37E.Count == 1 &&
+                                       recs37E[0].Title.Contains("Samsung BAR Plus") &&
+                                       recs37E[0].ResultBadge == Loc.Get("BadgeVerified");
+
+                        if (!pass37E)
+                        {
+                            failures.Add(string.Format("Test 37E Failed: Trusted device authorization not recorded. count={0}",
+                                recs37E != null ? recs37E.Count : -1));
+                            log("  FAILED: Trusted device arrival was not logged as authorized/verified.");
+                        }
+                        else
+                        {
+                            log("  PASSED: Trusted device arrival successfully recognized and logged with BadgeVerified.");
+                        }
+
+                        // ── TEST 37F: Auto-Eject Failure Recording ──
+                        log("[Test 37F] Auto-Eject Failure Recording (SafeEjectFailedStatus + BadgeFailed)...");
+                        ActivityRepository.Clear(out clearErr);
+                        TrustedDeviceRepository.IsDeviceTrustedSeam = null;
+
+                        var dev37F = new DeviceIdentity
+                        {
+                            FriendlyName = "Defective Locked Flash",
+                            DeviceInstanceId = @"USB\VID_9999&PID_8888\SER_37F",
+                            PhysicalUsbParentInstanceId = @"USB\VID_9999&PID_8888\SER_37F_PARENT",
+                            SerialNumber = "SER_37F",
+                            PhysicalDiskNumber = 4,
+                            PhysicalTransport = PhysicalBusType.Usb,
+                            WindowsClass = StorageClass.DiskDrive,
+                            VolumeMountings = new List<string> { "H:" },
+                            SafetyResult = SafetyValidationResult.Passed,
+                            IsRemovableMedia = true
+                        };
+
+                        bool isPresent37F = true;
+                        DeviceEnforcementLifecycleManager.PhysicalPresenceSeam = anchor => isPresent37F;
+                        DeviceDiscovery.RawDiskCandidatesSeam = () => isPresent37F ? new List<DeviceIdentity> { dev37F } : new List<DeviceIdentity>();
+                        DeviceEnforcementLifecycleManager.EjectExecutionSeam = (d, lat) => DeviceEjectResult.Failed;
+
+                        ActiveSentinel.EvaluateAndEnforceConnectedDevices(policyActive, false);
+
+                        List<ActivityRecord> recs37F = ActivityRepository.Load();
+                        bool pass37F = recs37F != null && recs37F.Count == 1 &&
+                                       recs37F[0].Category == ActivityCategory.Errors &&
+                                       recs37F[0].ResultBadge == Loc.Get("BadgeFailed") &&
+                                       recs37F[0].Title.Contains(Loc.Get("SafeEjectFailedStatus"));
+
+                        if (!pass37F)
+                        {
+                            failures.Add(string.Format("Test 37F Failed: Auto-eject failure not recorded accurately. count={0}",
+                                recs37F != null ? recs37F.Count : -1));
+                            log("  FAILED: Auto-eject failure was not recorded as an error activity.");
+                        }
+                        else
+                        {
+                            log("  PASSED: Auto-eject failure cleanly captured as Error category with SafeEjectFailedStatus.");
+                        }
+
+                        // ── TEST 37G: Headless Service Mode Event Persistence ──
+                        log("[Test 37G] Headless Service Mode Event Persistence (Zero GUI Dependency)...");
+                        ActivityRepository.Clear(out clearErr);
+
+                        // Simulate Session 0: LatencyTracker arrival notification ticks are 0
+                        LatencyTracker.ResetPnpArrivalNotification();
+
+                        var dev37G = new DeviceIdentity
+                        {
+                            FriendlyName = "Service Headless Device",
+                            DeviceInstanceId = @"USB\VID_1111&PID_2222\SER_37G",
+                            PhysicalUsbParentInstanceId = @"USB\VID_1111&PID_2222\SER_37G_PARENT",
+                            SerialNumber = "SER_37G",
+                            PhysicalDiskNumber = 5,
+                            PhysicalTransport = PhysicalBusType.Usb,
+                            WindowsClass = StorageClass.DiskDrive,
+                            VolumeMountings = new List<string> { "J:" },
+                            SafetyResult = SafetyValidationResult.Passed,
+                            IsRemovableMedia = true
+                        };
+
+                        bool isPresent37G = true;
+                        DeviceEnforcementLifecycleManager.PhysicalPresenceSeam = anchor => isPresent37G;
+                        DeviceDiscovery.RawDiskCandidatesSeam = () => isPresent37G ? new List<DeviceIdentity> { dev37G } : new List<DeviceIdentity>();
+                        DeviceEnforcementLifecycleManager.EjectExecutionSeam = (d, lat) => DeviceEjectResult.Success;
+
+                        ActiveSentinel.EvaluateAndEnforceConnectedDevices(policyActive, false);
+
+                        // Force cache reset to prove disk persistence in headless mode
+                        ActivityRepository.ResetCache();
+                        List<ActivityRecord> recs37G = ActivityRepository.Load();
+                        string diskFile = ActivityRepository.GetFilePath();
+                        bool fileOnDisk = File.Exists(diskFile) && new FileInfo(diskFile).Length > 0;
+
+                        bool pass37G = recs37G != null && recs37G.Count == 1 && fileOnDisk;
+                        if (!pass37G)
+                        {
+                            failures.Add(string.Format("Test 37G Failed: Headless service event persistence failed. count={0}, fileExists={1}",
+                                recs37G != null ? recs37G.Count : -1, fileOnDisk));
+                            log("  FAILED: Session 0 service mode did not persist event to disk without GUI.");
+                        }
+                        else
+                        {
+                            log("  PASSED: Session 0 headless service mode cleanly persisted event directly to physical disk file.");
+                        }
+
+                        // ── TEST 37H: GUI Startup Historic Load & Zero False Empty State ──
+                        log("[Test 37H] GUI Startup Historic Load & Zero False Empty State...");
+                        using (MainForm form = new MainForm())
+                        {
+                            form.TestIsolatedActivityRecords = null; // Production disk mode
+                            IntPtr handle = form.Handle;
+
+                            bool panelHasRecords = (form.RecentActivityPanel != null && form.RecentActivityPanel.RecordCount >= 1);
+
+                            form.TriggerSwitchTab(4); // Switch to Activity tab
+                            form.TriggerRefreshActivity();
+
+                            bool emptyHidden = (form.ActivityEmptyState != null && !form.ActivityEmptyState.Visible);
+
+                            bool pass37H = panelHasRecords && emptyHidden;
+                            if (!pass37H)
+                            {
+                                failures.Add(string.Format("Test 37H Failed: GUI startup historic load failed. panelCount={0}, emptyVisible={1}",
+                                    form.RecentActivityPanel != null ? form.RecentActivityPanel.RecordCount : -1,
+                                    form.ActivityEmptyState != null ? form.ActivityEmptyState.Visible : true));
+                                log("  FAILED: GUI displayed false empty state instead of pre-existing activity records.");
+                            }
+                            else
+                            {
+                                log("  PASSED: GUI startup correctly loaded historical service events; RecentActivityPanel populated and empty state hidden.");
+                            }
+                        }
+
+                        // ── TEST 37I: Dashboard RecentActivityPanel and Activity Page Consistency ──
+                        log("[Test 37I] Dashboard RecentActivityPanel and Activity Page Consistency...");
+                        ActivityRepository.Clear(out clearErr);
+                        for (int i = 1; i <= 5; i++)
+                        {
+                            ActivityRepository.AppendRecord(new ActivityRecord(
+                                DateTime.UtcNow.AddMinutes(-i),
+                                "Event " + i,
+                                "Context " + i,
+                                ActivityCategory.DeviceEvents,
+                                "Connected",
+                                Theme.AccentBlue));
+                        }
+
+                        using (MainForm form = new MainForm())
+                        {
+                            form.TestIsolatedActivityRecords = null;
+                            IntPtr handle = form.Handle;
+
+                            form.TriggerSwitchTab(4);
+                            form.TriggerRefreshActivity();
+
+                            int recentCount = form.RecentActivityPanel != null ? form.RecentActivityPanel.RecordCount : -1;
+                            int activeRowsCount = form.ActiveActivityRows.Count;
+                            int repoCount = ActivityRepository.Load().Count;
+
+                            bool pass37I = (recentCount == 5) && (activeRowsCount == 5) && (repoCount == 5);
+                            if (!pass37I)
+                            {
+                                failures.Add(string.Format("Test 37I Failed: Inconsistent activity rendering. recent={0}, activeRows={1}, repo={2}",
+                                    recentCount, activeRowsCount, repoCount));
+                                log("  FAILED: Discrepancy detected between dashboard recent activity and full activity page.");
+                            }
+                            else
+                            {
+                                log("  PASSED: Dashboard RecentActivityPanel and full Activity page render consistent records matching repository.");
+                            }
+                        }
+
+                        // ── TEST 37J: Multi-Partition Device Topology Single Arrival Invariant ──
+                        log("[Test 37J] Multi-Partition Device Topology Single Arrival Invariant...");
+                        ActivityRepository.Clear(out clearErr);
+                        DeviceEnforcementLifecycleManager.ResetForTest();
+
+                        var part1 = new DeviceIdentity
+                        {
+                            FriendlyName = "Ventoy Multi-Boot Part1",
+                            DeviceInstanceId = @"SCSI\DISK&VEN_VENTOY&PROD_1\PART1",
+                            PhysicalUsbParentInstanceId = @"USB\VID_0781&PID_55AA\MULTI_PARENT",
+                            SerialNumber = "VENTOY_SERIAL_37J",
+                            PhysicalDiskNumber = 6,
+                            PhysicalTransport = PhysicalBusType.Usb,
+                            WindowsClass = StorageClass.DiskDrive,
+                            VolumeMountings = new List<string> { "M:" },
+                            SafetyResult = SafetyValidationResult.Passed,
+                            IsRemovableMedia = true
+                        };
+
+                        var part2 = new DeviceIdentity
+                        {
+                            FriendlyName = "Ventoy Multi-Boot Part2",
+                            DeviceInstanceId = @"SCSI\DISK&VEN_VENTOY&PROD_2\PART2",
+                            PhysicalUsbParentInstanceId = @"USB\VID_0781&PID_55AA\MULTI_PARENT",
+                            SerialNumber = "VENTOY_SERIAL_37J",
+                            PhysicalDiskNumber = 6,
+                            PhysicalTransport = PhysicalBusType.Usb,
+                            WindowsClass = StorageClass.DiskDrive,
+                            VolumeMountings = new List<string> { "N:" },
+                            SafetyResult = SafetyValidationResult.Passed,
+                            IsRemovableMedia = true
+                        };
+
+                        bool isPresent37J = true;
+                        DeviceEnforcementLifecycleManager.PhysicalPresenceSeam = anchor => isPresent37J;
+                        DeviceDiscovery.RawDiskCandidatesSeam = () => isPresent37J ? new List<DeviceIdentity> { part1, part2 } : new List<DeviceIdentity>();
+                        DeviceEnforcementLifecycleManager.EjectExecutionSeam = (d, lat) => DeviceEjectResult.Success;
+
+                        ActiveSentinel.EvaluateAndEnforceConnectedDevices(policyActive, false);
+
+                        List<ActivityRecord> recs37J = ActivityRepository.Load();
+                        bool pass37J = recs37J != null && recs37J.Count == 1;
+
+                        if (!pass37J)
+                        {
+                            failures.Add(string.Format("Test 37J Failed: Duplicate events emitted for multi-partition device. count={0}",
+                                recs37J != null ? recs37J.Count : -1));
+                            log("  FAILED: Multiple arrival events emitted for partitions on the same physical drive.");
+                        }
+                        else
+                        {
+                            log("  PASSED: Multi-partition device successfully deduplicated to exactly one arrival event for physical drive.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        failures.Add("Test 37 Failed with exception: " + ex.Message);
+                        log("  FAILED: Test 37 threw exception: " + ex.Message);
+                    }
+                }
+            }
+            finally
+            {
+                DeviceEnforcementLifecycleManager.DisableTestMode();
+                DeviceDiscovery.ResetSeams();
+                TrustedDeviceRepository.IsDeviceTrustedSeam = null;
+                ActivityRepository.ResetCache();
+                ActivityRepository.IsTestMode = false;
                 try { if (Directory.Exists(testDir)) Directory.Delete(testDir, true); } catch { }
             }
         }

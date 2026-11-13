@@ -4294,7 +4294,12 @@ namespace UsbShieldPro
             RefreshActivityView();
         }
 
-        private void RefreshActivityView()
+        public void RefreshActivityViewPublic()
+        {
+            RefreshActivityView();
+        }
+
+        public void RefreshActivityView()
         {
             if (_activityScroll == null || _activityScroll.ContentPanel == null) return;
 
@@ -5952,7 +5957,7 @@ namespace UsbShieldPro
                 EnforcementOwnerState ownerState = EnforcementOwnerResolver.ResolveOwner();
                 bool canEnforce = EnforcementOwnerResolver.IsGuiEnforcementAllowed();
 
-                if (hasArrival && canEnforce)
+                if (canEnforce)
                 {
                     try
                     {
@@ -5962,7 +5967,6 @@ namespace UsbShieldPro
                         {
                             int remaining = TemporaryAccessManager.PeekRemainingSeconds();
                             var outcome = ActiveSentinel.EvaluateAndEnforceConnectedDevices(s.ActivePolicy, remaining > 0, dispatchSource);
-                            // Note: Blind 4-pass reconciliation polling removed in production in favor of event-driven interface wake
                         }
                     }
                     catch { }
@@ -5971,7 +5975,7 @@ namespace UsbShieldPro
                         EnforcementOwnerResolver.MarkGuiWorkerIdle();
                     }
                 }
-                else if (hasArrival && ownerState == EnforcementOwnerState.Service)
+                else if (ownerState == EnforcementOwnerState.Service)
                 {
                     try
                     {

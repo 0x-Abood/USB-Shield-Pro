@@ -370,7 +370,7 @@ namespace UsbShieldPro.Persistence
                 try
                 {
                     Directory.CreateDirectory(dir);
-                    if (string.IsNullOrEmpty(_filePathOverride))
+                    if (string.IsNullOrEmpty(_filePathOverride) && string.IsNullOrEmpty(SecurityAclHelper.BaseDirectoryOverride))
                     {
                         string secErr;
                         SecurityAclHelper.ApplyProgramDataDirectorySecurity(dir, out secErr);
@@ -447,7 +447,7 @@ namespace UsbShieldPro.Persistence
                     File.Move(temp, path);
                 }
 
-                if (string.IsNullOrEmpty(_filePathOverride))
+                if (string.IsNullOrEmpty(_filePathOverride) && string.IsNullOrEmpty(SecurityAclHelper.BaseDirectoryOverride))
                 {
                     SecurityAclHelper.ApplySensitiveFileSecurity(path);
                     if (File.Exists(bak))
@@ -494,7 +494,7 @@ namespace UsbShieldPro.Persistence
                 if (File.Exists(primaryPath))
                 {
                     File.Move(primaryPath, corruptArchive);
-                    if (string.IsNullOrEmpty(_filePathOverride))
+                    if (string.IsNullOrEmpty(_filePathOverride) && string.IsNullOrEmpty(SecurityAclHelper.BaseDirectoryOverride))
                     {
                         SecurityAclHelper.ApplySensitiveFileSecurity(corruptArchive);
                     }
