@@ -6,7 +6,7 @@
     [string]$OutDir,
 
     [Parameter(Mandatory=$false)]
-    [string]$OutName = "USB-Shield-Pro-v2.1.0-Setup.exe"
+    [string]$OutName = "USB-Shield-Pro-v2.1.1-Setup.exe"
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,10 +15,14 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $rootDir = (Resolve-Path "$scriptDir\..").Path
 
 if (-not $SourceExe) {
-    $SourceExe = "$rootDir\release\USB-Shield-Pro-v2.1\UsbShieldPro.exe"
+    if (Test-Path "$rootDir\UsbShieldPro.exe") {
+        $SourceExe = "$rootDir\UsbShieldPro.exe"
+    } else {
+        $SourceExe = "$rootDir\staging\USB-Shield-Pro-v2.1.1-Candidate\UsbShieldPro.exe"
+    }
 }
 if (-not $OutDir) {
-    $OutDir = "$rootDir\release"
+    $OutDir = "$rootDir\staging\USB-Shield-Pro-v2.1.1-Candidate"
 }
 
 if (-not (Test-Path $SourceExe)) {

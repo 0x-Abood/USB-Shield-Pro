@@ -136,12 +136,17 @@ namespace UsbShieldPro.Service
             ActiveSentinel.DeviceEnforcementPending += OnServiceDeviceEnforcementPending;
 
             ActivityRepository.AppendRecord(new ActivityRecord(
-                DateTime.Now,
-                "USB Shield Pro service started.",
-                "Background protection service active and armed.",
+                DateTime.UtcNow,
+                "SERVICE_STARTED",
+                "",
+                "",
+                "",
                 ActivityCategory.Security,
-                "Armed",
-                Theme.AccentBlue
+                "BadgeActive",
+                Theme.AccentBlue,
+                "",
+                "USB Shield Pro service started.",
+                "Background protection service active and armed."
             ));
 
             // Start Sentinel loop
@@ -166,12 +171,17 @@ namespace UsbShieldPro.Service
             try
             {
                 ActivityRepository.AppendRecord(new ActivityRecord(
-                    DateTime.Now,
-                    "USB Shield Pro service stopped.",
-                    "Background protection service paused or shut down.",
+                    DateTime.UtcNow,
+                    "SERVICE_STOPPED",
+                    "",
+                    "",
+                    "",
                     ActivityCategory.Security,
-                    "Stopped",
-                    Theme.TextSecondary
+                    "BadgeOffline",
+                    Theme.TextSecondary,
+                    "",
+                    "USB Shield Pro service stopped.",
+                    "Background protection service paused or shut down."
                 ));
             }
             catch { }
@@ -515,11 +525,16 @@ namespace UsbShieldPro.Service
                                 try
                                 {
                                     ActivityRepository.AppendRecord(new ActivityRecord(
-                                        DateTime.Now,
-                                        string.Format(Loc.Get("EventPolicyApplied"), newPolicy.PolicyVersion),
+                                        DateTime.UtcNow,
+                                        "POLICY_APPLIED",
+                                        "",
+                                        "",
+                                        newPolicy.PolicyVersion.ToString(),
                                         ActivityCategory.PolicyChanges,
-                                        Loc.Get("BadgePolicy"),
+                                        "BadgePolicy",
                                         Theme.AccentBlue,
+                                        "",
+                                        string.Format(Loc.Get("EventPolicyApplied"), newPolicy.PolicyVersion),
                                         "Protection policy updated via Service IPC."));
                                 }
                                 catch { }
@@ -557,11 +572,16 @@ namespace UsbShieldPro.Service
                                 try
                                 {
                                     ActivityRepository.AppendRecord(new ActivityRecord(
-                                        DateTime.Now,
-                                        string.Format(Loc.Get("EventTempAccessStarted"), minutes),
+                                        DateTime.UtcNow,
+                                        "TEMP_ACCESS_STARTED",
+                                        "",
+                                        "",
+                                        minutes.ToString(),
                                         ActivityCategory.PolicyChanges,
-                                        Loc.Get("BadgeTempActive"),
+                                        "BadgeTempActive",
                                         Theme.AccentOrange,
+                                        "",
+                                        string.Format(Loc.Get("EventTempAccessStarted"), minutes),
                                         string.Format("Temporary access granted for {0} minutes via Service.", minutes)));
                                 }
                                 catch { }
@@ -586,11 +606,16 @@ namespace UsbShieldPro.Service
                                 try
                                 {
                                     ActivityRepository.AppendRecord(new ActivityRecord(
-                                        DateTime.Now,
-                                        Loc.Get("EventTempAccessExpired"),
+                                        DateTime.UtcNow,
+                                        "TEMP_ACCESS_EXPIRED",
+                                        "",
+                                        "",
+                                        "",
                                         ActivityCategory.PolicyChanges,
-                                        Loc.Get("BadgeEnforced"),
+                                        "BadgeEnforced",
                                         Theme.AccentGreen,
+                                        "",
+                                        Loc.Get("EventTempAccessExpired"),
                                         "Temporary access cancelled via Service IPC; protection re-locked."));
                                 }
                                 catch { }
@@ -649,7 +674,22 @@ namespace UsbShieldPro.Service
                 Color color = (e != null && e.EjectSuccess) ? Theme.AccentGreen : Theme.AccentRed;
                 string context = (e != null && !string.IsNullOrEmpty(e.Message)) ? e.Message : name;
 
-                ActivityRepository.AppendRecord(new ActivityRecord(DateTime.Now, activityText, cat, badge, color, context));
+                string eventCode = (e != null && e.EjectSuccess) ? "SAFE_EJECT_SUCCESS" : "SAFE_EJECT_FAILED";
+                string badgeKey = (e != null && e.EjectSuccess) ? "BadgeSuccess" : "BadgeFailed";
+                string devId = (e != null && e.Device != null) ? (e.Device.DeviceInstanceId ?? e.Device.SerialNumber ?? name) : name;
+
+                ActivityRepository.AppendRecord(new ActivityRecord(
+                    DateTime.UtcNow,
+                    eventCode,
+                    name,
+                    devId,
+                    (e != null && !string.IsNullOrEmpty(e.Message)) ? e.Message : "",
+                    cat,
+                    badgeKey,
+                    color,
+                    "",
+                    activityText,
+                    context));
             }
             catch { }
         }
@@ -659,15 +699,21 @@ namespace UsbShieldPro.Service
             try
             {
                 string name = e.Device != null ? e.Device.FriendlyName : "USB Storage";
+                string devId = (e.Device != null) ? (e.Device.DeviceInstanceId ?? e.Device.SerialNumber ?? name) : name;
                 string text = Loc.Get("SafeEjectPreparing");
                 string activityText = string.Format("{0}: {1}", name, text);
 
                 ActivityRepository.AppendRecord(new ActivityRecord(
-                    DateTime.Now,
-                    activityText,
+                    DateTime.UtcNow,
+                    "SAFE_EJECT_PREPARING",
+                    name,
+                    devId,
+                    "",
                     ActivityCategory.DeviceEvents,
-                    Loc.Get("BadgeReactiveAutoEject"),
+                    "BadgeReactiveAutoEject",
                     Theme.AccentOrange,
+                    "",
+                    activityText,
                     (e != null && !string.IsNullOrEmpty(e.Message)) ? e.Message : name));
             }
             catch { }

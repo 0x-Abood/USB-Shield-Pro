@@ -20,7 +20,7 @@ namespace UsbShieldPro
         {
             // App & Window Branding
             {"AppTitle",               "USB Shield Pro"},
-            {"Version",                "v2.0"},
+            {"Version",                "v2.1.1"},
             {"Copyright",              "Copyright \u00A9 2026 0xAbood (https://github.com/0x-Abood/USB-Shield-Pro)"},
             {"LangSwitch",             "العربية"},
             {"LangTooltip",           "التبديل إلى العربية"},
@@ -466,7 +466,7 @@ namespace UsbShieldPro
             {"SettingsStartServiceBtn",       "Start Service"},
             {"SettingsStopServiceBtn",        "Stop Service"},
             {"SettingsSecAbout",              "About USB Shield Pro"},
-            {"SettingsAboutTitle",            "USB Shield Pro v2.1"},
+            {"SettingsAboutTitle",            "USB Shield Pro v2.1.1"},
             {"SettingsAboutDesc",             "Lightweight, non-destructive USB storage & portable device security utility for Windows."},
             {"SettingsAboutSysInfo",          "Windows 10 / 11 \u2022 .NET Framework 4.8"},
             {"SettingsAboutCopyright",        "Developed by 0xAbood \u2022 github.com/0x-Abood/USB-Shield-Pro \u2022 \u00A9 2026"},
@@ -673,7 +673,7 @@ namespace UsbShieldPro
         {
             // App & Window Branding
             {"AppTitle",               "USB Shield Pro"},
-            {"Version",                "v2.0"},
+            {"Version",                "v2.1.1"},
             {"Copyright",              "حقوق النشر \u00A9 2026 0xAbood (https://github.com/0x-Abood/USB-Shield-Pro)"},
             {"LangSwitch",             "English"},
             {"LangTooltip",           "Switch to English"},
@@ -1119,7 +1119,7 @@ namespace UsbShieldPro
             {"SettingsStartServiceBtn",       "تشغيل الخدمة"},
             {"SettingsStopServiceBtn",        "إيقاف الخدمة"},
             {"SettingsSecAbout",              "حول USB Shield Pro"},
-            {"SettingsAboutTitle",            "USB Shield Pro v2.1"},
+            {"SettingsAboutTitle",            "USB Shield Pro v2.1.1"},
             {"SettingsAboutDesc",             "أداة خفيفة وآمنة للتحكم في وسائط تخزين USB والأجهزة المحمولة على نظام ويندوز."},
             {"SettingsAboutSysInfo",          "Windows 10 / 11 \u2022 .NET Framework 4.8"},
             {"SettingsAboutCopyright",        "تطوير: 0xAbood \u2022 github.com/0x-Abood/USB-Shield-Pro \u2022 \u00A9 2026"},

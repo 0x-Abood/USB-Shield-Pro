@@ -30,6 +30,15 @@ namespace UsbShieldPro
         public static extern bool ReleaseCapture();
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         public static extern int SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool RedrawWindow(IntPtr hWnd, IntPtr lprcUpdate, IntPtr hrgnUpdate, uint flags);
+
+        private const int WM_SETREDRAW = 0x000B;
+        private const uint RDW_INVALIDATE = 0x0001;
+        private const uint RDW_ALLCHILDREN = 0x0080;
+        private const uint RDW_UPDATENOW = 0x0100;
+        private const uint RDW_ERASE = 0x0004;
+        private const uint RDW_FRAME = 0x0400;
 
         [System.Runtime.InteropServices.DllImport("dwmapi.dll", PreserveSig = true)]
         private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
@@ -1189,6 +1198,10 @@ namespace UsbShieldPro
         {
             CleanupPreviousUiControls();
             RightToLeft = Loc.RtlValue;
+            if (IsHandleCreated)
+            {
+                SendMessage(Handle, WM_SETREDRAW, 0, 0);
+            }
             SuspendLayout();
 
             AppSettingsData settings = SettingsRepository.Load();
@@ -1203,7 +1216,7 @@ namespace UsbShieldPro
             // ═══════════════════════════════════════════════════════════════
             _topBar = new AppTopBar();
             _topBar.BrandTitle = "USB SHIELD PRO";
-            _topBar.VersionText = "v2.1";
+            _topBar.VersionText = "v2.1.1";
             _topBar.LanguageButton.Text = isRtl ? "AR" : "EN";
 
             _topBar.CloseClicked += delegate { Close(); };
@@ -4390,9 +4403,10 @@ namespace UsbShieldPro
                     if (rec.Category != ActivityCategory.Errors) continue;
                 }
 
-                // Date filter
-                if (minDate.HasValue && rec.Timestamp < minDate.Value) continue;
-                if (maxDate.HasValue && rec.Timestamp > maxDate.Value) continue;
+                // Date filter (evaluated strictly against user local presentation timestamp)
+                DateTime localTs = rec.LocalTimestamp;
+                if (minDate.HasValue && localTs < minDate.Value) continue;
+                if (maxDate.HasValue && localTs > maxDate.Value) continue;
 
                 filtered.Add(rec);
             }
@@ -4420,9 +4434,10 @@ namespace UsbShieldPro
                 DateTime lastDate = DateTime.MinValue;
                 foreach (var rec in filtered)
                 {
-                    if (rec.Timestamp.Date != lastDate)
+                    DateTime recLocal = rec.LocalTimestamp;
+                    if (recLocal.Date != lastDate)
                     {
-                        lastDate = rec.Timestamp.Date;
+                        lastDate = recLocal.Date;
                         string dateHeaderStr;
                         if (lastDate == DateTime.Today)
                             dateHeaderStr = (Loc.IsRtl ? "اليوم — " : "Today — ") + lastDate.ToString("yyyy-MM-dd");
@@ -4601,7 +4616,7 @@ namespace UsbShieldPro
 
         public void LogActivity(string title, ActivityCategory cat, string badge, Color badgeColor, string context = "")
         {
-            ActivityRecord rec = new ActivityRecord(DateTime.Now, title, cat, badge, badgeColor, context);
+            ActivityRecord rec = new ActivityRecord(DateTime.UtcNow, title, cat, badge, badgeColor, context);
             _activityRecords.Insert(0, rec);
             if (!IsCaptureMode && TestIsolatedActivityRecords == null)
             {
@@ -6252,51 +6267,66 @@ namespace UsbShieldPro
 
         private void RebuildUI()
         {
-            int currentTab = (_sidebar != null) ? _sidebar.SelectedIndex : 0;
-            BuildUI();
-            if (_sidebar != null && currentTab < 7)
+            bool handleCreated = IsHandleCreated;
+            if (handleCreated)
             {
-                _sidebar.SelectedIndex = currentTab;
-                SwitchTab(currentTab);
+                SendMessage(Handle, WM_SETREDRAW, 0, 0);
             }
-            RefreshLiveStatus();
-            RefreshDevicesList();
-            RefreshWhitelistView();
-            if (_tray != null) _tray.BuildMenu();
-
-            // Explicitly force full layout and window bounds recalculation
-            PerformLayout();
-            OnResize(EventArgs.Empty);
-
-            if (_contentPanel != null)
+            SuspendLayout();
+            try
             {
-                _contentPanel.Visible = true;
-                if (_contentPanel.Width <= 0 || _contentPanel.Height <= 0)
+                int currentTab = (_sidebar != null) ? _sidebar.SelectedIndex : 0;
+                BuildUI();
+                if (_sidebar != null && currentTab < 7)
                 {
-                    int topBarH = (_topBar != null && _topBar.Visible) ? _topBar.Height : 0;
-                    int sideBarW = (_sidebar != null && _sidebar.Visible) ? _sidebar.Width : 0;
-                    int cpW = Math.Max(100, ClientSize.Width - sideBarW - Padding.Horizontal);
-                    int cpH = Math.Max(100, ClientSize.Height - topBarH - Padding.Vertical);
-                    int cpX = (Loc.IsRtl) ? Padding.Left : (Padding.Left + sideBarW);
-                    int cpY = Padding.Top + topBarH;
-                    _contentPanel.SetBounds(cpX, cpY, cpW, cpH);
+                    _sidebar.SelectedIndex = currentTab;
+                    SwitchTab(currentTab);
                 }
-                _contentPanel.PerformLayout();
-                if (_contentPanel.Controls.Count > 0)
+                RefreshLiveStatus();
+                RefreshDevicesList();
+                RefreshWhitelistView();
+                if (_tray != null) _tray.BuildMenu();
+
+                // Explicitly force full layout and window bounds recalculation
+                PerformLayout();
+                OnResize(EventArgs.Empty);
+
+                if (_contentPanel != null)
                 {
-                    Control activeTab = _contentPanel.Controls[0];
-                    activeTab.Visible = true;
-                    if (activeTab.Width <= 0 || activeTab.Height <= 0)
+                    _contentPanel.Visible = true;
+                    if (_contentPanel.Width <= 0 || _contentPanel.Height <= 0)
                     {
-                        activeTab.SetBounds(0, 0, _contentPanel.ClientSize.Width, _contentPanel.ClientSize.Height);
+                        int topBarH = (_topBar != null && _topBar.Visible) ? _topBar.Height : 0;
+                        int sideBarW = (_sidebar != null && _sidebar.Visible) ? _sidebar.Width : 0;
+                        int cpW = Math.Max(100, ClientSize.Width - sideBarW - Padding.Horizontal);
+                        int cpH = Math.Max(100, ClientSize.Height - topBarH - Padding.Vertical);
+                        int cpX = (Loc.IsRtl) ? Padding.Left : (Padding.Left + sideBarW);
+                        int cpY = Padding.Top + topBarH;
+                        _contentPanel.SetBounds(cpX, cpY, cpW, cpH);
                     }
-                    activeTab.PerformLayout();
-                    activeTab.BringToFront();
+                    _contentPanel.PerformLayout();
+                    if (_contentPanel.Controls.Count > 0)
+                    {
+                        Control activeTab = _contentPanel.Controls[0];
+                        activeTab.Visible = true;
+                        if (activeTab.Width <= 0 || activeTab.Height <= 0)
+                        {
+                            activeTab.SetBounds(0, 0, _contentPanel.ClientSize.Width, _contentPanel.ClientSize.Height);
+                        }
+                        activeTab.PerformLayout();
+                        activeTab.BringToFront();
+                    }
                 }
             }
-
-            Refresh();
-            Invalidate(true);
+            finally
+            {
+                ResumeLayout(true);
+                if (IsHandleCreated)
+                {
+                    SendMessage(Handle, WM_SETREDRAW, 1, 0);
+                    RedrawWindow(Handle, IntPtr.Zero, IntPtr.Zero, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW | RDW_ERASE | RDW_FRAME);
+                }
+            }
         }
 
         public void ShowFromTray()

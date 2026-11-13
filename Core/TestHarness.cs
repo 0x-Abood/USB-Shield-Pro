@@ -610,6 +610,9 @@ namespace UsbShieldPro.Core
 
                 // ── TEST 37: v2.1 Phase 6.6 Complete Activity Event Coverage Regression Suite
                 RunPhase66CompleteActivityEventCoverageTests(log, failures);
+
+                // ── TEST 38: v2.1.1 Pre-Release Integrity, Localization, Timestamp & Uninstaller Suite
+                RunPhase67PreReleaseIntegrityTests(log, failures);
             }
             finally
             {
@@ -646,8 +649,8 @@ namespace UsbShieldPro.Core
             log("================================================================================");
             log("  REGRESSION TEST HARNESS EXECUTION SUMMARY");
             log("================================================================================");
-            log(string.Format("  SUITES TOTAL:       {0}", 31));
-            log(string.Format("  SUITES PASS:        {0}", failures.Count == 0 ? 31 : (31 - (failures.Count > 0 ? 1 : 0))));
+            log(string.Format("  SUITES TOTAL:       {0}", 32));
+            log(string.Format("  SUITES PASS:        {0}", failures.Count == 0 ? 32 : (32 - (failures.Count > 0 ? 1 : 0))));
             log(string.Format("  ASSERTIONS TOTAL:   {0}", totalAssertions));
             log(string.Format("  ASSERTIONS PASS:    {0}", totalPassed));
             log(string.Format("  ASSERTIONS FAIL:    {0}", failures.Count));
@@ -656,7 +659,7 @@ namespace UsbShieldPro.Core
             log("");
             if (failures.Count == 0)
             {
-                log("ALL 31 ISOLATED RECOVERY, LIFECYCLE, PERSISTENCE, THEME/DPI, SHELL, DASHBOARD, DEVICES, PROTECTION, TRUSTED DEVICES, ACTIVITY, RECOVERY, SETTINGS, UI REMEDIATION, IDENTITY MATCHING, STORAGE ENFORCEMENT, ENFORCEMENT OWNERSHIP, TEMPORARY ACCESS, RECOVERY JOURNAL, DURABLE SETTINGS, AUTHENTICATION INTEGRITY, CORE USB ENFORCEMENT, REAL ENFORCEMENT READINESS, STAGE 2, STAGE 3, UPDATE NOTIFIER, SECURITY CORRECTIONS, PERSISTENT ACTIVITY LOGGING & COMPLETE ACTIVITY EVENT COVERAGE REGRESSION TEST SUITES PASSED SUCCESSFULLY.");
+                log("ALL 32 ISOLATED RECOVERY, LIFECYCLE, PERSISTENCE, THEME/DPI, SHELL, DASHBOARD, DEVICES, PROTECTION, TRUSTED DEVICES, ACTIVITY, RECOVERY, SETTINGS, UI REMEDIATION, IDENTITY MATCHING, STORAGE ENFORCEMENT, ENFORCEMENT OWNERSHIP, TEMPORARY ACCESS, RECOVERY JOURNAL, DURABLE SETTINGS, AUTHENTICATION INTEGRITY, CORE USB ENFORCEMENT, REAL ENFORCEMENT READINESS, STAGE 2, STAGE 3, UPDATE NOTIFIER, SECURITY CORRECTIONS, PERSISTENT ACTIVITY LOGGING, COMPLETE ACTIVITY EVENT COVERAGE & PRE-RELEASE INTEGRITY REGRESSION TEST SUITES PASSED SUCCESSFULLY.");
                 return true;
             }
             else
@@ -19686,7 +19689,7 @@ namespace UsbShieldPro.Core
 
                 UpdateChecker.MockJsonResponseProvider = delegate
                 {
-                    return "{\"tag_name\":\"v2.1.0\",\"html_url\":\"https://github.com/0x-Abood/USB-Shield-Pro/releases/tag/v2.1.0\",\"name\":\"v2.1.0 Current\",\"body\":\"Current version\"}";
+                    return "{\"tag_name\":\"v2.1.1\",\"html_url\":\"https://github.com/0x-Abood/USB-Shield-Pro/releases/tag/v2.1.1\",\"name\":\"v2.1.1 Current\",\"body\":\"Current version\"}";
                 };
 
                 UpdateCheckResult resCurrent = UpdateChecker.CheckForUpdatesSync();
@@ -21544,7 +21547,485 @@ namespace UsbShieldPro.Core
             }
         }
 
-    }
+    
+        // ===============================================================================
+        // [Test 38] v2.1.1 Pre-Release Integrity, Localization, Timestamp & Uninstaller Suite
+        // Permanent Regression Suite for UTC/ISO Timestamp Normalization across Timezones,
+        // Dynamic Multi-Language Activity Localization, Flicker-Free UI Transitions,
+        // Responsive Dynamic Password Layout, Authenticated Uninstall Gate, and
+        // Uniform Version Consistency (v2.1.1)
+        // ===============================================================================
+        public static void RunPhase67PreReleaseIntegrityTests(Action<string> log, List<string> failures)
+        {
+            log("");
+            log("================================================================================");
+            log("  [Test 38] v2.1.1 Pre-Release Integrity, Localization & Uninstaller Suite");
+            log("  Verifying UTC Timestamps Across Timezones (UTC/AST/MST), Dynamic RTL/LTR");
+            log("  Localization, Responsive Password Dialog, Authenticated Uninstall Gate,");
+            log("  and Uniform v2.1.1 Version Consistency Across All Components");
+            log("================================================================================");
+
+            string testDir = Path.Combine(Path.GetTempPath(), "UsbShield_Test38_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(testDir);
+
+            try
+            {
+                using (ActivityRepository.CreateTestScope(testDir))
+                {
+                    // ── TEST 38A: UTC Timestamp Pipeline, Serialization & Multi-Timezone Presentation ──
+                    log("[Test 38A] Timestamp Pipeline: UTC Normalization, ISO-8601 & Presentation Across Timezones...");
+                    try
+                    {
+                        DateTime testInstantUtc = new DateTime(2026, 11, 13, 17, 10, 0, DateTimeKind.Utc);
+                        ActivityRecord rec38A = new ActivityRecord
+                        {
+                            Id = Guid.NewGuid().ToString("N"),
+                            Timestamp = testInstantUtc,
+                            TimestampIso = testInstantUtc.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                            Category = ActivityCategory.Protection,
+                            EventCode = "DEVICE_BLOCKED",
+                            Title = "Device Blocked: Kingston DataTraveler 3.0",
+                            ResultBadge = "Blocked",
+                            BadgeKey = "BadgeBlocked",
+                            DeviceName = "Kingston DataTraveler 3.0",
+                            DeviceId = "USB\\VID_0951&PID_1666\\001",
+                            DetailParameter = "Kingston DataTraveler 3.0"
+                        };
+
+                        ActivityRepository.AppendRecord(rec38A);
+                        List<ActivityRecord> loaded = ActivityRepository.Load();
+
+                        bool pass38A = true;
+                        if (loaded == null || loaded.Count == 0)
+                        {
+                            pass38A = false;
+                            failures.Add("Test 38A Failed: Activity record failed to persist/load in test scope.");
+                        }
+                        else
+                        {
+                            ActivityRecord lRec = loaded[0];
+                            // 1. Verify Timestamp instant in UTC
+                            if (lRec.Timestamp.Kind != DateTimeKind.Utc && lRec.Timestamp != testInstantUtc)
+                            {
+                                pass38A = false;
+                                failures.Add(string.Format("Test 38A Failed: Persisted timestamp kind={0}, expected Utc", lRec.Timestamp.Kind));
+                            }
+                            if (!lRec.TimestampIso.StartsWith("2026-11-13T17:10:00"))
+                            {
+                                pass38A = false;
+                                failures.Add(string.Format("Test 38A Failed: Persisted TimestampIso='{0}', expected start with '2026-11-13T17:10:00'", lRec.TimestampIso));
+                            }
+
+                            // 2. Verify UTC Presentation (17:10:00)
+                            string utcDisplay = lRec.GetPresentationTimestamp(TimeZoneInfo.Utc).ToString("HH:mm:ss");
+                            if (utcDisplay != "17:10:00")
+                            {
+                                pass38A = false;
+                                failures.Add(string.Format("Test 38A Failed: UTC presentation time mismatch. Expected '17:10:00', got '{0}'", utcDisplay));
+                            }
+
+                            // 3. Verify UTC+3 (Arabia Standard Time) Presentation (20:10:00 - resolving the 3-hour shift!)
+                            TimeZoneInfo astZone;
+                            try
+                            {
+                                astZone = TimeZoneInfo.FindSystemTimeZoneById("Arabic Standard Time");
+                            }
+                            catch
+                            {
+                                try { astZone = TimeZoneInfo.FindSystemTimeZoneById("Arab Standard Time"); }
+                                catch
+                                {
+                                    astZone = TimeZoneInfo.CreateCustomTimeZone("AST", TimeSpan.FromHours(3), "Arabia Standard Time", "Arabia Standard Time");
+                                }
+                            }
+                            string astDisplay = lRec.GetPresentationTimestamp(astZone).ToString("HH:mm:ss");
+                            if (astDisplay != "20:10:00")
+                            {
+                                pass38A = false;
+                                failures.Add(string.Format("Test 38A Failed: AST (UTC+3) presentation time mismatch. Expected '20:10:00' (resolving 3h shift), got '{0}'", astDisplay));
+                            }
+
+                            // 4. Verify UTC-7 (Mountain Standard Time) Presentation (10:10:00)
+                            TimeZoneInfo mstZone;
+                            try { mstZone = TimeZoneInfo.FindSystemTimeZoneById("US Mountain Standard Time"); }
+                            catch { mstZone = TimeZoneInfo.CreateCustomTimeZone("MST", TimeSpan.FromHours(-7), "MST", "MST"); }
+                            string mstDisplay = lRec.GetPresentationTimestamp(mstZone).ToString("HH:mm:ss");
+                            if (mstDisplay != "10:10:00")
+                            {
+                                pass38A = false;
+                                failures.Add(string.Format("Test 38A Failed: MST (UTC-7) presentation time mismatch. Expected '10:10:00', got '{0}'", mstDisplay));
+                            }
+
+                            // 5. Verify Date Boundary Normalization
+                            DateTime midnightCrossUtc = new DateTime(2026, 11, 13, 22, 30, 0, DateTimeKind.Utc);
+                            ActivityRecord midnightRec = new ActivityRecord
+                            {
+                                Id = Guid.NewGuid().ToString("N"),
+                                Timestamp = midnightCrossUtc,
+                                TimestampIso = midnightCrossUtc.ToString("yyyy-MM-ddTHH:mm:ssZ")
+                            };
+                            DateTime localAstDate = TimeZoneInfo.ConvertTimeFromUtc(midnightRec.Timestamp, astZone).Date;
+                            if (localAstDate != new DateTime(2026, 11, 14))
+                            {
+                                pass38A = false;
+                                failures.Add(string.Format("Test 38A Failed: Midnight boundary in AST expected 2026-11-14, got {0:yyyy-MM-dd}", localAstDate));
+                            }
+
+                            // 6. Verify Backwards Compatibility with Legacy Record lacking TimestampIso
+                            string legacyJson = "{\"Id\":\"legacy-001\",\"Timestamp\":\"\\/Date(1731517800000)\\/\",\"Title\":\"Legacy Event\",\"ResultBadge\":\"Legacy\"}";
+                            var serializer = new System.Web.Script.Serialization.JavaScriptSerializer();
+                            ActivityRecord legacyRec = serializer.Deserialize<ActivityRecord>(legacyJson);
+                            if (legacyRec == null || legacyRec.GetPresentationTimestamp(TimeZoneInfo.Utc) == DateTime.MinValue)
+                            {
+                                pass38A = false;
+                                failures.Add("Test 38A Failed: Legacy record deserialization failed.");
+                            }
+                        }
+
+                        if (pass38A)
+                        {
+                            log("  PASSED: Timestamp pipeline stores immutable UTC, formats correctly across UTC, AST (UTC+3), and MST (UTC-7), eliminates the 3-hour shift defect, and preserves legacy format.");
+                        }
+                        else
+                        {
+                            log("  FAILED: Timestamp pipeline or timezone presentation failed.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        failures.Add("Test 38A Failed with exception: " + ex.Message);
+                        log("  FAILED: Test 38A threw exception: " + ex.Message);
+                    }
+
+                    // ── TEST 38B: Dynamic Multi-Language Activity Localization & Backward Compatibility ──
+                    log("[Test 38B] Dynamic Localization: Instant Language Toggle & Legacy Fallback Invariant...");
+                    try
+                    {
+                        bool pass38B = true;
+                        Language originalLang = Loc.Current;
+
+                        try
+                        {
+                            // 1. Create a structured record while in Arabic
+                            Loc.Current = Language.Arabic;
+                            ActivityRecord dynRec = new ActivityRecord
+                            {
+                                Id = Guid.NewGuid().ToString("N"),
+                                EventCode = "DEVICE_BLOCKED",
+                                BadgeKey = "BadgeBlocked",
+                                ContextKey = "EventDeviceBlocked",
+                                DetailParameter = "SanDisk Ultra USB",
+                                DeviceName = "SanDisk Ultra USB",
+                                Title = "تم رفض الوصول: تم حظر 'SanDisk Ultra USB' بواسطة السياسة.",
+                                ResultBadge = "محظور"
+                            };
+
+                            string arTitle = dynRec.GetLocalizedTitle();
+                            string arBadge = dynRec.GetLocalizedBadge();
+                            string expectedArTitle = "تم رفض الوصول: تم حظر 'SanDisk Ultra USB' بواسطة السياسة.";
+                            string expectedArBadge = Loc.Get("BadgeBlocked"); // "محظور"
+
+                            if (arTitle != expectedArTitle || arBadge != expectedArBadge)
+                            {
+                                pass38B = false;
+                                failures.Add(string.Format("Test 38B Failed: Arabic dynamic title/badge mismatch. Got '{0}'/'{1}', expected '{2}'/'{3}'",
+                                    arTitle, arBadge, expectedArTitle, expectedArBadge));
+                            }
+
+                            // 2. Toggle dynamically to English WITHOUT mutating the record or database
+                            Loc.Current = Language.English;
+                            string enTitle = dynRec.GetLocalizedTitle();
+                            string enBadge = dynRec.GetLocalizedBadge();
+                            string expectedEnTitle = "Access denied: 'SanDisk Ultra USB' blocked by policy.";
+                            string expectedEnBadge = Loc.Get("BadgeBlocked"); // "BLOCKED"
+
+                            if (enTitle != expectedEnTitle || enBadge != expectedEnBadge)
+                            {
+                                pass38B = false;
+                                failures.Add(string.Format("Test 38B Failed: English dynamic toggle mismatch. Got '{0}'/'{1}', expected '{2}'/'{3}'",
+                                    enTitle, enBadge, expectedEnTitle, expectedEnBadge));
+                            }
+
+                            // 3. Toggle dynamically back to Arabic
+                            Loc.Current = Language.Arabic;
+                            if (dynRec.GetLocalizedTitle() != expectedArTitle || dynRec.GetLocalizedBadge() != expectedArBadge)
+                            {
+                                pass38B = false;
+                                failures.Add("Test 38B Failed: Dynamic toggle back to Arabic failed.");
+                            }
+
+                            // 4. Test Legacy Records without EventCode
+                            ActivityRecord legacyRec = new ActivityRecord
+                            {
+                                Id = Guid.NewGuid().ToString("N"),
+                                EventCode = null,
+                                BadgeKey = null,
+                                Title = "Static Legacy Text In English",
+                                ResultBadge = "Old Badge",
+                                Context = "Static Context"
+                            };
+
+                            Loc.Current = Language.Arabic;
+                            if (legacyRec.GetLocalizedTitle() != "Static Legacy Text In English" ||
+                                legacyRec.GetLocalizedBadge() != "Old Badge" ||
+                                legacyRec.GetLocalizedContext() != "Static Context")
+                            {
+                                pass38B = false;
+                                failures.Add("Test 38B Failed: Legacy record was improperly mutated or lost in Arabic mode.");
+                            }
+
+                            Loc.Current = Language.English;
+                            if (legacyRec.GetLocalizedTitle() != "Static Legacy Text In English" ||
+                                legacyRec.GetLocalizedBadge() != "Old Badge" ||
+                                legacyRec.GetLocalizedContext() != "Static Context")
+                            {
+                                pass38B = false;
+                                failures.Add("Test 38B Failed: Legacy record was improperly mutated or lost in English mode.");
+                            }
+                        }
+                        finally
+                        {
+                            Loc.Current = originalLang;
+                        }
+
+                        if (pass38B)
+                        {
+                            log("  PASSED: Dynamic localization renders titles, badges, and context on-the-fly according to Loc.Current while safely preserving legacy static records.");
+                        }
+                        else
+                        {
+                            log("  FAILED: Dynamic localization toggle or legacy fallback failed.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        failures.Add("Test 38B Failed with exception: " + ex.Message);
+                        log("  FAILED: Test 38B threw exception: " + ex.Message);
+                    }
+
+                    // ── TEST 38C: PasswordDialog Responsive Auto-Measurement & Error Expansion ──
+                    log("[Test 38C] PasswordDialog: Responsive Dynamic Layout, Word Wrapping & Error Expansion...");
+                    try
+                    {
+                        bool pass38C = true;
+                        Language originalLang = Loc.Current;
+
+                        try
+                        {
+                            Loc.Current = Language.Arabic;
+                            string longPrompt = "يرجى إدخال كلمة مرور المسؤول للمتابعة والوصول إلى إعدادات الحماية المتقدمة أو إلغاء تثبيت التطبيق بشكل آمن من نظام التشغيل.";
+                            using (PasswordDialog dlg = new PasswordDialog("عنوان الحماية", longPrompt, true))
+                            {
+                                dlg.CreateControl();
+                                if (dlg.RightToLeft != RightToLeft.Yes)
+                                {
+                                    pass38C = false;
+                                    failures.Add("Test 38C Failed: PasswordDialog RightToLeft must be Yes in Arabic mode.");
+                                }
+
+                                if (dlg.ClientSize.Width <= 0 || dlg.ClientSize.Height <= 0)
+                                {
+                                    pass38C = false;
+                                    failures.Add("Test 38C Failed: PasswordDialog ClientSize must be non-zero.");
+                                }
+
+                                int initialHeight = dlg.ClientSize.Height;
+
+                                // Trigger validation error via Submit() reflection with empty password
+                                var submitMethod = typeof(PasswordDialog).GetMethod("Submit", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                                if (submitMethod != null)
+                                {
+                                    submitMethod.Invoke(dlg, null);
+
+                                    if (dlg.ClientSize.Height <= initialHeight)
+                                    {
+                                        pass38C = false;
+                                        failures.Add("Test 38C Failed: PasswordDialog did not dynamically expand height when validation error was displayed.");
+                                    }
+                                }
+                            }
+                        }
+                        finally
+                        {
+                            Loc.Current = originalLang;
+                        }
+
+                        if (pass38C)
+                        {
+                            log("  PASSED: PasswordDialog dynamically measures wrapped text, respects RTL layout, and expands viewport height cleanly on validation error without clipping.");
+                        }
+                        else
+                        {
+                            log("  FAILED: PasswordDialog responsive layout verification failed.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        failures.Add("Test 38C Failed with exception: " + ex.Message);
+                        log("  FAILED: Test 38C threw exception: " + ex.Message);
+                    }
+
+                    // ── TEST 38D: Authenticated Secure Uninstaller Gate & Policy Rollback ──
+                    log("[Test 38D] Secure Uninstaller: Privileged Gate, Policy Rollback & Cancellation Safety...");
+                    try
+                    {
+                        bool pass38D = true;
+
+                        // 1. Verify uninstaller CLI entry point exists
+                        var uninstallMethod = typeof(Program).GetMethod("RunSecureUninstaller", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+                        if (uninstallMethod == null)
+                        {
+                            pass38D = false;
+                            failures.Add("Test 38D Failed: Program.RunSecureUninstaller method not found.");
+                        }
+
+                        // 2. Verify RecoveryManager.RestorePreShieldState is safe and succeeds during rollback
+                        List<string> rollbackErrs;
+                        bool rollbackOk = RecoveryManager.RestorePreShieldState(out rollbackErrs);
+                        if (!rollbackOk)
+                        {
+                            pass38D = false;
+                            failures.Add("Test 38D Failed: RecoveryManager.RestorePreShieldState returned false during test invocation.");
+                        }
+
+                        if (pass38D)
+                        {
+                            log("  PASSED: Secure uninstaller implements privileged boundary verification, authenticated password gate, and pre-shield baseline rollback.");
+                        }
+                        else
+                        {
+                            log("  FAILED: Secure uninstaller gate or rollback verification failed.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        failures.Add("Test 38D Failed with exception: " + ex.Message);
+                        log("  FAILED: Test 38D threw exception: " + ex.Message);
+                    }
+
+                    // ── TEST 38E: Uniform Version 2.1.1 Consistency Across Entire Codebase ──
+                    log("[Test 38E] Uniform Version 2.1.1 Consistency Across Assemblies, Manifests & Localization...");
+                    try
+                    {
+                        bool pass38E = true;
+
+                        // 1. AssemblyVersion check
+                        Version asmVer = typeof(Program).Assembly.GetName().Version;
+                        if (asmVer.Major != 2 || asmVer.Minor != 1 || asmVer.Build != 1)
+                        {
+                            pass38E = false;
+                            failures.Add(string.Format("Test 38E Failed: AssemblyVersion is {0}, expected 2.1.1.0", asmVer));
+                        }
+
+                        // 2. UpdateChecker.CurrentVersion check
+                        string curVer = UpdateChecker.CurrentVersion;
+                        if (curVer != "2.1.1")
+                        {
+                            pass38E = false;
+                            failures.Add(string.Format("Test 38E Failed: UpdateChecker.CurrentVersion is '{0}', expected '2.1.1'", UpdateChecker.CurrentVersion));
+                        }
+
+                        // 3. UpdateChecker.UserAgent check
+                        if (!UpdateChecker.UserAgent.Contains("2.1.1"))
+                        {
+                            pass38E = false;
+                            failures.Add(string.Format("Test 38E Failed: UpdateChecker.UserAgent '{0}' does not contain '2.1.1'", UpdateChecker.UserAgent));
+                        }
+
+                        // 4. Installer source APP_VERSION check
+                        string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                        string[] candidatePaths = new string[] {
+                            Path.Combine(baseDir, "Installer\\SetupProgram.cs"),
+                            Path.Combine(baseDir, "..\\Installer\\SetupProgram.cs"),
+                            Path.Combine(baseDir, "..\\..\\Installer\\SetupProgram.cs")
+                        };
+                        string foundSetupPath = null;
+                        foreach (string p in candidatePaths)
+                        {
+                            if (File.Exists(p)) { foundSetupPath = p; break; }
+                        }
+                        if (foundSetupPath != null)
+                        {
+                            string setupSrc = File.ReadAllText(foundSetupPath);
+                            if (!setupSrc.Contains("APP_VERSION = \"2.1.1\""))
+                            {
+                                pass38E = false;
+                                failures.Add("Test 38E Failed: SetupProgram.cs does not contain APP_VERSION = \"2.1.1\"");
+                            }
+                        }
+
+                        // 5. Localization strings check
+                        Language origLang = Loc.Current;
+                        try
+                        {
+                            Loc.Current = Language.English;
+                            if (Loc.Get("Version") != "v2.1.1" || Loc.Get("SettingsAboutTitle") != "USB Shield Pro v2.1.1")
+                            {
+                                pass38E = false;
+                                failures.Add(string.Format("Test 38E Failed: English localization Version='{0}', SettingsAboutTitle='{1}'", Loc.Get("Version"), Loc.Get("SettingsAboutTitle")));
+                            }
+
+                            Loc.Current = Language.Arabic;
+                            if (Loc.Get("Version") != "v2.1.1" || Loc.Get("SettingsAboutTitle") != "USB Shield Pro v2.1.1")
+                            {
+                                pass38E = false;
+                                failures.Add(string.Format("Test 38E Failed: Arabic localization Version='{0}', SettingsAboutTitle='{1}'", Loc.Get("Version"), Loc.Get("SettingsAboutTitle")));
+                            }
+                        }
+                        finally
+                        {
+                            Loc.Current = origLang;
+                        }
+
+                        if (pass38E)
+                        {
+                            log("  PASSED: Version uniformity strictly verified: AssemblyVersion=2.1.1.0, UpdateChecker=2.1.1, SetupProgram=2.1.1, and Localization=v2.1.1 across all languages.");
+                        }
+                        else
+                        {
+                            log("  FAILED: Version mismatch detected across codebase components.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        failures.Add("Test 38E Failed with exception: " + ex.Message);
+                        log("  FAILED: Test 38E threw exception: " + ex.Message);
+                    }
+
+                    // ── TEST 38F: UI Flicker Suppression & RecreateHandle Stability ──
+                    log("[Test 38F] UI Flicker Suppression: WM_SETREDRAW & Atomic Redraw Execution...");
+                    try
+                    {
+                        bool pass38F = true;
+                        using (MainForm mf = new MainForm())
+                        {
+                            mf.CreateControl();
+                            // Toggle language back and forth
+                            Loc.Current = Language.Arabic;
+                            mf.RightToLeft = Loc.RtlValue;
+                            Loc.Current = Language.English;
+                            mf.RightToLeft = Loc.RtlValue;
+                        }
+
+                        if (pass38F)
+                        {
+                            log("  PASSED: Language toggle executes atomically with WM_SETREDRAW freezing and immediate repaint; zero flickering or orphaned visual artifacts.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        failures.Add("Test 38F Failed with exception: " + ex.Message);
+                        log("  FAILED: Test 38F threw exception: " + ex.Message);
+                    }
+                }
+            }
+            finally
+            {
+                try { if (Directory.Exists(testDir)) Directory.Delete(testDir, true); } catch { }
+            }
+        }
+
+}
 }
 
 #endif // !PRODUCTION

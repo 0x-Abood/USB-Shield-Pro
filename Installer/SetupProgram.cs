@@ -22,12 +22,12 @@ using System.Windows.Forms;
 using Microsoft.Win32;
 
 [assembly: AssemblyTitle("USB Shield Pro Setup")]
-[assembly: AssemblyDescription("USB Shield Pro v2.1.0 Installer & Uninstaller")]
+[assembly: AssemblyDescription("USB Shield Pro v2.1.1 Installer & Uninstaller")]
 [assembly: AssemblyCompany("0xAbood")]
 [assembly: AssemblyProduct("USB Shield Pro")]
 [assembly: AssemblyCopyright("Copyright © 2026 0xAbood (https://github.com/0x-Abood/USB-Shield-Pro)")]
-[assembly: AssemblyVersion("2.1.0.0")]
-[assembly: AssemblyFileVersion("2.1.0.0")]
+[assembly: AssemblyVersion("2.1.1.0")]
+[assembly: AssemblyFileVersion("2.1.1.0")]
 
 namespace UsbShieldPro.Installer
 {
@@ -37,7 +37,7 @@ namespace UsbShieldPro.Installer
         public static long EXPECTED_EXE_LENGTH { get { return PayloadManifest.ExpectedExeLength; } }
 
         public const string APP_NAME = "USB Shield Pro";
-        public const string APP_VERSION = "2.1.0";
+        public const string APP_VERSION = "2.1.1";
         public const string SERVICE_NAME = "UsbShieldService";
 
         [DllImport("kernel32.dll", SetLastError = true)]
@@ -643,7 +643,7 @@ namespace UsbShieldPro.Installer
                     if (appKey != null)
                     {
                         appKey.SetValue("DisplayName", "USB Shield Pro", RegistryValueKind.String);
-                        appKey.SetValue("DisplayVersion", "2.1.0.0", RegistryValueKind.String);
+                        appKey.SetValue("DisplayVersion", "2.1.1.0", RegistryValueKind.String);
                         appKey.SetValue("Publisher", "0xAbood", RegistryValueKind.String);
                         appKey.SetValue("URLInfoAbout", "https://github.com/0x-Abood/USB-Shield-Pro", RegistryValueKind.String);
                         appKey.SetValue("HelpLink", "https://github.com/0x-Abood/USB-Shield-Pro", RegistryValueKind.String);
@@ -664,19 +664,58 @@ namespace UsbShieldPro.Installer
         {
             bool isAr = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.Equals("ar", StringComparison.OrdinalIgnoreCase);
 
-            if (!silent)
+            // Locate main application binary for authenticated privileged uninstallation
+            string targetDir = Path.GetDirectoryName(Application.ExecutablePath);
+            string exePath = Path.Combine(targetDir, "UsbShieldPro.exe");
+            if (!File.Exists(exePath))
             {
-                string title = isAr ? "إلغاء تثبيت USB Shield Pro" : "Uninstall USB Shield Pro";
-                string prompt = isAr
-                    ? "هل أنت متأكد من رغبتك في إلغاء تثبيت USB Shield Pro وجميع مكوناته من هذا الكمبيوتر؟"
-                    : "Are you sure you want to completely uninstall USB Shield Pro and all its components from this computer?";
-
-                DialogResult dr = MessageBox.Show(prompt, title, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-                if (dr != DialogResult.Yes) return;
+                targetDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), APP_NAME);
+                exePath = Path.Combine(targetDir, "UsbShieldPro.exe");
             }
 
-            // 1. Stop processes
-            StopRunningProcesses();
+            if (File.Exists(exePath))
+            {
+                // Delegate to authenticated UsbShieldPro.exe --uninstall
+                ProcessStartInfo psi = new ProcessStartInfo
+                {
+                    FileName = exePath,
+                    Arguments = silent ? "--uninstall --silent" : "--uninstall",
+                    UseShellExecute = true
+                };
+                try
+                {
+                    Process proc = Process.Start(psi);
+                    if (proc != null)
+                    {
+                        proc.WaitForExit();
+                        if (proc.ExitCode != 0)
+                        {
+                            // Uninstallation was aborted, cancelled, or failed auth!
+                            return; // Do NOT delete anything!
+                        }
+                    }
+                }
+                catch
+                {
+                    return;
+                }
+            }
+            else
+            {
+                if (!silent)
+                {
+                    string title = isAr ? "إلغاء تثبيت USB Shield Pro" : "Uninstall USB Shield Pro";
+                    string prompt = isAr
+                        ? "هل أنت متأكد من رغبتك في إلغاء تثبيت USB Shield Pro وجميع مكوناته من هذا الكمبيوتر؟"
+                        : "Are you sure you want to completely uninstall USB Shield Pro and all its components from this computer?";
+
+                    DialogResult dr = MessageBox.Show(prompt, title, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    if (dr != DialogResult.Yes) return;
+                }
+
+                // 1. Stop processes
+                StopRunningProcesses();
+            }
 
             // 2. Stop & Delete Background Service via native Win32 advapi32 APIs
             try
@@ -751,7 +790,7 @@ namespace UsbShieldPro.Installer
             // 5. Spawn Delayed Self-Deleting Cleanup for C:\Program Files\USB Shield Pro
             try
             {
-                string targetDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), APP_NAME);
+                targetDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), APP_NAME);
                 ProcessStartInfo psi = new ProcessStartInfo
                 {
                     FileName = "cmd.exe",

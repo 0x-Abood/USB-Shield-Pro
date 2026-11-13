@@ -60,11 +60,11 @@ namespace UsbShieldPro.Core
     /// </summary>
     public static class UpdateChecker
     {
-        public const string CurrentVersion = "2.1.0";
+        public const string CurrentVersion = "2.1.1";
         public const string DefaultReleasesUrl = "https://github.com/0x-Abood/USB-Shield-Pro/releases";
         public const string ExpectedRepoBaseUrl = "https://github.com/0x-Abood/USB-Shield-Pro";
         public const string LatestReleaseApiUrl = "https://api.github.com/repos/0x-Abood/USB-Shield-Pro/releases/latest";
-        public const string UserAgent = "USB-Shield-Pro/2.1.0 (+https://github.com/0x-Abood/USB-Shield-Pro)";
+        public const string UserAgent = "USB-Shield-Pro/2.1.1 (+https://github.com/0x-Abood/USB-Shield-Pro)";
         public const int RequestTimeoutMs = 8000;
 
         /// <summary>

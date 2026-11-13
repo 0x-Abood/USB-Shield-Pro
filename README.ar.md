@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/0x-Abood/USB-Shield-Pro/releases/tag/v2.1.0"><img src="https://img.shields.io/badge/الإصدار-v2.1.0%20الذهبي-00b4d8.svg" alt="الإصدار v2.1.0"></a>
+  <a href="https://github.com/0x-Abood/USB-Shield-Pro/releases/tag/v2.1.1"><img src="https://img.shields.io/badge/الإصدار-v2.1.1-00b4d8.svg" alt="الإصدار v2.1.1"></a>
   <a href="https://github.com/0x-Abood/USB-Shield-Pro/actions/workflows/ci.yml"><img src="https://github.com/0x-Abood/USB-Shield-Pro/actions/workflows/ci.yml/badge.svg" alt="Build & Test Harness"></a>
   <img src="https://img.shields.io/badge/نظام%20التشغيل-ويندوز%2010%20%7C%2011%20x64-0077b6.svg" alt="ويندوز 10 / 11">
   <img src="https://img.shields.io/badge/بيئة%20العمل-.NET%20Framework%204.8-2b9348.svg" alt=".NET Framework 4.8">
@@ -61,7 +61,7 @@
 - **التعايش مع بيئات الدومين المؤسسية (Active Directory GPO / Microsoft Intune):** تدير الأداة سياسات السجل المحلية للجهاز (`Local Machine Policies`). في بيئات العمل المؤسسية المدارة بواسطة `Domain GPO` أو `Intune`، قد تقوم سياسات الدومين بالكتابة فوق السياسات المحلية عند تحديث السياسات الدوري (`gpupdate /force`).
 - **أجهزة الإدخال وهجمات BadUSB (HID Keyboard Emulation):** العتاد الخبيث الذي يُعرّف نفسه كوحدة إدخال مفاتيح (مثل هجمات BadUSB أو أجهزة Rubber Ducky) لا يقوم بتحميل مشغل التخزين `USBSTOR` ويقع خارج نطاق أدوات التحكم في وسائط التخزين. التصدي لهذه الهجمات يتطلب أقفالاً فيزيائية للمنافذ أو حلول تحكم على مستوى أجهزة HID.
 - **تزوير المعرفات العتادية (Hardware Identifier Spoofing):** تعتمد القائمة البيضاء على المعرفات العتادية المصرح بها من قِبل وحدة التحكم في الجهاز. إذا تم استخدام شريحة ميكروكنترولر برمجية قابلة للتهيئة لنسخ نفس الـ `VID/PID` والرقم التسلسلي لجهاز موثوق، فلا يمكن تمييزها على مستوى استعلام فضاء المستخدم دون مصادقة تشفيرية على مستوى العتاد.
-- **نطاق جناح اختبارات CI الآلية (CI Test Harness Scope):** يتحقق جناح الاختبارات الآلي في CI على GitHub Actions (28 جناح اختبار / 353 تأكيداً برمجياً) من منطق مطابقة القواعد، وسلامة معاملات السجل ومعاملات التراجع، وبناء الحزم وحماية Disk 0 برمجياً (Unit & Integration Logic)، ولا يقوم بمحاكاة أجهزة USB فيزيائية حقيقية على خوادم GitHub السحابية.
+- **نطاق جناح اختبارات CI الآلية (CI Test Harness Scope):** يتحقق جناح الاختبارات الآلي في CI على GitHub Actions (32 جناح اختبار / 391 تأكيداً برمجياً) من منطق مطابقة القواعد، وسلامة معاملات السجل ومعاملات التراجع، وبناء الحزم وحماية Disk 0 برمجياً (Unit & Integration Logic)، ولا يقوم بمحاكاة أجهزة USB فيزيائية حقيقية على خوادم GitHub السحابية.
 
 ---
 
@@ -145,6 +145,7 @@ flowchart TD
 | فئة العتاد والتوصيل | سلوك النمط الأول (Mode A - الإغلاق الشامل) | سلوك النمط الثاني (Mode B - القائمة البيضاء) | الدلالة الهندسية وضمانات السلامة |
 | :--- | :--- | :--- | :--- |
 | **قرص الإقلاع الداخلي NVMe**<br>*(القرص 0 / قسم الويندوز `C:`)* | **مستثنى ومحمي دائماً**<br>يعمل بكامل الصلاحيات ودون أي قيود على الإطلاق. | **مستثنى ومحمي دائماً**<br>تجاوز إلزامي لحماية النواة؛ محصن ضد أي قفل أو فصل أو إخراج. | حماية برمجية صارمة غير قابلة للتعطيل (`SystemDeviceSafetyGuard`) تمنع المساس بملفات النظام. |
+| **الأقراص الداخلية الثابتة SATA / AHCI / RAID**<br>*(أقراص التخزين الداخلية غير التابعة للويندوز)* | **مستثناة ومحمية بالكامل**<br>تظل كافة مسارات وأقراص التخزين الداخلية متاحة وتعمل بلا أي قيود. | **مستثناة ومحمية بالكامل**<br>يضمن فحص النواقل الإيجابي عدم استهداف الأقراص الداخلية أو طردها إطلاقاً. | التحقق العتادي الدقيق من عدم انتماء مسار الجهاز لناقل الـ USB (`PositiveUsbEvidenceInvariant`). |
 | **فلاشة USB 2.0 / 3.0 قياسية**<br>*(مشغل `USBSTOR`)* | **محظورة كلياً**<br>يتوقف تعريف المشغل (`Start=4`) أو يُمنع الوصول بالكامل عبر `Deny_All`. | **إنفاذ القائمة البيضاء**<br>تبقى الفلاشات المعتمدة متصلة، وتُطرد أي فلاشة غير مصرح بها فورياً. | مطابقة الهوية العتادية عبر `VID`/`PID`/الرقم التسلسلي خلال نافذة وصول PnP. |
 | **فلاشة مقسمة ذاتية الإقلاع**<br>*(مثل Ventoy: قسم EFI + قسم البيانات)* | **محظورة كلياً**<br>تُحظر كافة الأقسام التابعة مسبقاً على مستوى المشغل والسياسة. | **إنفاذ القائمة البيضاء**<br>قفل وفصل جميع الأقسام الشقيقة (مثل `D:` و `F:`) بالتوازي وطرد الجهاز بأمان. | منع أخطاء `PNP_VetoDevice` عبر تسلسل فك التركيب المتزامن لكافة الأقسام. |
 | **حاوية أقراص خارجية USB 3.x / NVMe (UASP)**<br>*(تُبلّغ كأقراص ثابتة Fixed Disks)* | **تتجاوز Start=4 و Deny_All**<br>تتجاوز تعطيل USBSTOR وسياسات الوسائط القابلة للإزالة لتعريفها كقرص ثابت. | **إنفاذ القائمة البيضاء**<br>ترصدها خدمة `UsbShieldService` عبر devnode وتفصل الأقسام وتطرد العقدة فورياً. | تخضع لإدارة وطرد الخدمة التفاعلية بدلاً من الاعتماد السلبي على سياسات السجل. |
@@ -156,9 +157,9 @@ flowchart TD
 
 | الحزمة | الصيغة | الحجم | رابط التحميل | فحص الحماية والنزاهة |
 | :--- | :--- | :--- | :--- | :--- |
-| **المثبت التلقائي** | `.exe` | `1,253,376 بايت` | [تحميل Setup.exe](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1.0-Setup.exe) | [تقرير VirusTotal نظيف (0/72)](https://www.virustotal.com/gui/file/8d675c4ca6b26d8e29f9ebb2f9b4431df7d347e2c476b6c090dad84b6619872d) |
-| **النسخة المحمولة** | `.zip` | `387,108 بايت` | [تحميل Portable.zip](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1.0-Portable.zip) | [تقرير VirusTotal نظيف (0/72)](https://www.virustotal.com/gui/file/8d991350abce42915e8c0b87f49017a4a347a9212592af778090eb7c89a29f6b) |
-| **ملف البصمات** | `.txt` | `2,811 بايت` | [تحميل ملف البصمات SHA-256](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1-SHA256.txt) | التحقق عبر `Get-FileHash` في PowerShell |
+| **المثبت التلقائي** | `.exe` | `1,311,744 بايت` | [تحميل Setup.exe](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.1/USB-Shield-Pro-v2.1.1-Setup.exe) | بصمات رقمية موثقة |
+| **النسخة المحمولة** | `.zip` | `403,139 بايت` | [تحميل Portable.zip](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.1/USB-Shield-Pro-v2.1.1-Portable.zip) | بصمات رقمية موثقة |
+| **ملف البصمات** | `.txt` | `817 بايت` | [تحميل ملف البصمات SHA-256](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.1/USB-Shield-Pro-v2.1.1-SHA256.txt) | التحقق عبر `Get-FileHash` في PowerShell |
 
 ---
 
@@ -179,6 +180,9 @@ UsbShieldPro.exe --restore-defaults
 
 :: استعادة دقيقة ومطابقة من سجل التغييرات
 UsbShieldPro.exe --restore-exact
+
+:: إلغاء التثبيت الآمن والمصادق مع التراجع التام عن سياسات التخزين
+UsbShieldPro.exe --uninstall
 ```
 
 ---
@@ -192,7 +196,7 @@ UsbShieldPro.exe --restore-exact
 - **عزل شبكي كامل لخدمة النظام الخلفية:** تظل خدمة الويندوز الخلفية (`UsbShieldService` / `--service`) معزولة تماماً بنسبة 100% عن أي اتصال شبكي.
 - **قائمة نطاقات بيضاء صارمة:** يتم التحقق بدقة من أن أي رابط يفتح في المتصفح ينتمي حصرياً للمستودع الرسمي `https://github.com/0x-Abood/USB-Shield-Pro/`.
 - **دعم البيئات المعزولة (Air-Gapped) والتقييد الزمني:** يتم الفحص التلقائي بعد 2.5 ثانية من فتح الواجهة بشكل غير معطل، ومقيد بفاصل زمني لا يقل عن 12 ساعة. يمكن لمسؤولي الشبكات المعزولة تعطيل الفحص كلياً عبر **الإعدادات &larr; سلوك التطبيق &larr; التحقق من التحديثات تلقائياً**.
-- **ترقية مباشرة تحافظ على الإعدادات:** يؤدي تشغيل مثبت التحديث الجديد أو استبدال الملف التنفيذي إلى الحفاظ التام على سجل السياسات، وقاعدة الأجهزة الموثوقة، وسجل الاستعادة التاريخي في `%ProgramData%\USBShieldPro` دون أي فقدان للبيانات.
+- **ترقية مباشرة تحافظ على الإعدادات:** يؤدي تشغيل مثبت التحديث الجديد `USB-Shield-Pro-v2.1.1-Setup.exe` أو استبدال الملف التنفيذي إلى الحفاظ التام على سجل السياسات، وقاعدة الأجهزة الموثوقة، وسجل الاستعادة التاريخي في `%ProgramData%\USBShieldPro` دون أي فقدان للبيانات.
 
 ---
 
@@ -200,13 +204,23 @@ UsbShieldPro.exe --restore-exact
 
 تم بناء جميع الملفات التنفيذية ببيئة نظيفة وخالية تماماً من الرموز البرمجية التصحيحية أو المسارات المحلية (`/optimize+ /debug-`).
 
+### v2.1.1 (الإصدار الحالي)
+
+| اسم الملف | النوع | الحجم (بايت) | بصمة SHA-256 الرسمية |
+| :--- | :--- | :--- | :--- |
+| **`USB-Shield-Pro-v2.1.1-Setup.exe`** | مثبت الإعداد | `1,311,744` | `BFD2C7C21D19834733D33CFF524B01C1BF1BDA57D526345D71BF75F03A747601` |
+| **`USB-Shield-Pro-v2.1.1-Portable.zip`** | حزمة محمولة | `403,139` | `65E942EF04C47C0F4DDE5CAB245FBA0F4CC9C47478EC1DD96A1D443942B33FC4` |
+| **`UsbShieldPro.exe`** | ملف تنفيذي مستقل | `1,107,968` | `68ED07B1112F761D0C5B6F2D7815B9BA083F33B8FE33DA30724726C3350B9431` |
+| **`UsbShieldPro.exe.config`** | ضبط الشاشات | `598` | `53840DABDB7510AC21965024AEC4797025C920C965D29BBAA46FFA324338C5B1` |
+| **`README.txt`** | ملاحظات الإصدار | `7,007` | `21E5B2F4E286BCC1E49B4F7529DA4ACDD352A21628F368501B8CD9F17021B6E3` |
+
+### v2.1.0 (الإصدار الذهبي السابق)
+
 | اسم الملف | النوع | الحجم (بايت) | بصمة SHA-256 الرسمية |
 | :--- | :--- | :--- | :--- |
 | **`USB-Shield-Pro-v2.1.0-Setup.exe`** | مثبت الإعداد | `1,253,376` | `8D675C4CA6B26D8E29F9EBB2F9B4431DF7D347E2C476B6C090DAD84B6619872D` |
 | **`USB-Shield-Pro-v2.1.0-Portable.zip`** | حزمة محمولة | `387,108` | `8D991350ABCE42915E8C0B87F49017A4A347A9212592AF778090EB7C89A29F6B` |
 | **`UsbShieldPro.exe`** | ملف تنفيذي مستقل | `1,076,736` | `C0EDC176CCAD5CB490933F8FCE8D94141D67E31B49E6A80DCAF88E772ACE8311` |
-| **`UsbShieldPro.exe.config`** | ضبط الشاشات | `598` | `53840DABDB7510AC21965024AEC4797025C920C965D29BBAA46FFA324338C5B1` |
-| **`README.txt`** | ملاحظات الإصدار | `6,998` | `3B72B744C64DF260E54BBC5AE5B0888C9F742C320DB3C62C9D26D5CBC1DAEA4F` |
 
 ### التحقق من النزاهة الرقمية (PowerShell)
 
@@ -217,10 +231,10 @@ UsbShieldPro.exe --restore-exact
 
 ```powershell
 # التحقق من مثبت الإعداد
-Get-FileHash .\release\USB-Shield-Pro-v2.1.0-Setup.exe -Algorithm SHA256
+Get-FileHash .\USB-Shield-Pro-v2.1.1-Setup.exe -Algorithm SHA256
 
 # التحقق من النسخة المحمولة
-Get-FileHash .\release\USB-Shield-Pro-v2.1.0-Portable.zip -Algorithm SHA256
+Get-FileHash .\USB-Shield-Pro-v2.1.1-Portable.zip -Algorithm SHA256
 ```
 
 ---
@@ -245,7 +259,7 @@ Get-FileHash .\release\USB-Shield-Pro-v2.1.0-Portable.zip -Algorithm SHA256
    ```cmd
    Installer\build_installer.bat
    ```
-4. تشغيل حزمة اختبارات الأتمتة الشاملة (28 جناح اختبار، 353 تأكيداً):
+4. تشغيل حزمة اختبارات الأتمتة الشاملة (32 جناح اختبار، 391 تأكيداً برمجياً):
    ```cmd
    TestRunner.exe --test-harness
    ```

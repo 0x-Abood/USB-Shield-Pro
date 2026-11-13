@@ -1212,12 +1212,20 @@ namespace UsbShieldPro.Core
                             badge = Loc.Get("BadgeDisconnected");
                         }
 
+                        string eventCode = (item.PriorState == EnforcementState.EjectedUntilRemoval) ? "DEVICE_UNPLUGGED_EJECTED" : "DEVICE_DISCONNECTED";
+                        string badgeKey = (item.PriorState == EnforcementState.EjectedUntilRemoval || item.PriorState == EnforcementState.FailedTerminal) ? "BadgeRemoved" : "BadgeDisconnected";
+
                         ActivityRepository.AppendRecord(new ActivityRecord(
-                            DateTime.Now,
-                            title,
+                            DateTime.UtcNow,
+                            eventCode,
+                            name,
+                            item.StorageId ?? item.Key,
+                            "",
                             ActivityCategory.DeviceEvents,
-                            badge,
+                            badgeKey,
                             Theme.TextMuted,
+                            "",
+                            title,
                             item.StorageId ?? item.Key));
                     }
                     catch { }

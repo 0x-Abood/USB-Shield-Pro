@@ -269,9 +269,14 @@ namespace UsbShieldPro.Persistence
                 if (current.Count > 0)
                 {
                     ActivityRecord latest = current[0];
-                    if (string.Equals(latest.Title, record.Title, StringComparison.OrdinalIgnoreCase) &&
-                        string.Equals(latest.ResultBadge, record.ResultBadge, StringComparison.OrdinalIgnoreCase) &&
-                        Math.Abs((record.Timestamp.ToUniversalTime() - latest.Timestamp.ToUniversalTime()).TotalSeconds) < 1.5)
+                    bool sameEvent = (!string.IsNullOrEmpty(record.EventCode) && !string.IsNullOrEmpty(latest.EventCode))
+                        ? (string.Equals(latest.EventCode, record.EventCode, StringComparison.OrdinalIgnoreCase) &&
+                           string.Equals(latest.DeviceId, record.DeviceId, StringComparison.OrdinalIgnoreCase) &&
+                           string.Equals(latest.BadgeKey, record.BadgeKey, StringComparison.OrdinalIgnoreCase))
+                        : (string.Equals(latest.Title, record.Title, StringComparison.OrdinalIgnoreCase) &&
+                           string.Equals(latest.ResultBadge, record.ResultBadge, StringComparison.OrdinalIgnoreCase));
+
+                    if (sameEvent && Math.Abs((record.Timestamp.ToUniversalTime() - latest.Timestamp.ToUniversalTime()).TotalSeconds) < 1.5)
                     {
                         return true; // Cleanly suppressed duplicate
                     }
@@ -320,9 +325,14 @@ namespace UsbShieldPro.Persistence
                     if (current.Count > 0)
                     {
                         ActivityRecord latest = current[0];
-                        if (string.Equals(latest.Title, rec.Title, StringComparison.OrdinalIgnoreCase) &&
-                            string.Equals(latest.ResultBadge, rec.ResultBadge, StringComparison.OrdinalIgnoreCase) &&
-                            Math.Abs((rec.Timestamp.ToUniversalTime() - latest.Timestamp.ToUniversalTime()).TotalSeconds) < 1.5)
+                        bool sameEvent = (!string.IsNullOrEmpty(rec.EventCode) && !string.IsNullOrEmpty(latest.EventCode))
+                            ? (string.Equals(latest.EventCode, rec.EventCode, StringComparison.OrdinalIgnoreCase) &&
+                               string.Equals(latest.DeviceId, rec.DeviceId, StringComparison.OrdinalIgnoreCase) &&
+                               string.Equals(latest.BadgeKey, rec.BadgeKey, StringComparison.OrdinalIgnoreCase))
+                            : (string.Equals(latest.Title, rec.Title, StringComparison.OrdinalIgnoreCase) &&
+                               string.Equals(latest.ResultBadge, rec.ResultBadge, StringComparison.OrdinalIgnoreCase));
+
+                        if (sameEvent && Math.Abs((rec.Timestamp.ToUniversalTime() - latest.Timestamp.ToUniversalTime()).TotalSeconds) < 1.5)
                         {
                             continue;
                         }
@@ -514,6 +524,13 @@ namespace UsbShieldPro.Persistence
                 {
                     Id = r.Id,
                     Timestamp = r.Timestamp,
+                    TimestampIso = r.TimestampIso,
+                    EventCode = r.EventCode,
+                    DeviceName = r.DeviceName,
+                    DeviceId = r.DeviceId,
+                    DetailParameter = r.DetailParameter,
+                    BadgeKey = r.BadgeKey,
+                    ContextKey = r.ContextKey,
                     Title = r.Title,
                     Context = r.Context,
                     Category = r.Category,

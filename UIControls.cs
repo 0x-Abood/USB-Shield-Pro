@@ -1803,9 +1803,20 @@ namespace UsbShieldPro
     class PasswordDialog : Form
     {
         private TextBox _pwBox;
+        private Label _descLbl;
         private Label _errorLabel;
+        private ModernButton _submitBtn;
+        private ModernButton _cancelBtn;
+        private Panel _titleBar;
         private string _actionPrompt;
         private bool _verifyCurrent;
+        private int _contentWidth;
+        private int _padX;
+        private int _padY;
+        private int _gap;
+        private int _btnH;
+        private int _titleBarH;
+
         public string EnteredPassword { get; private set; }
         public bool UsedRecoveryKey { get; private set; }
 
@@ -1830,76 +1841,174 @@ namespace UsbShieldPro
             StartPosition = FormStartPosition.CenterParent;
             TopMost = false;
             ShowInTaskbar = false;
-            BackColor = Theme.BgDark;
-            ForeColor = Theme.TextPrimary;
+
+            IThemePalette pal = ThemeManager.ActivePalette;
+            BackColor = pal.Surface;
+            ForeColor = pal.TextPrimary;
             Font = Theme.FontNormal;
             RightToLeft = Loc.RtlValue;
-            Size = new Size(460, 240);
+
+            bool isRtl = RightToLeft == RightToLeft.Yes;
+            int dlgWidth = Math.Max(DpiManager.ScaleInt(480), DpiManager.ScaleInt(500));
+            _padX = DpiManager.ScaleInt(24);
+            _padY = DpiManager.ScaleInt(18);
+            _gap = DpiManager.ScaleInt(12);
+            _btnH = DpiManager.ScaleInt(36);
+            _titleBarH = DpiManager.ScaleInt(42);
+            _contentWidth = dlgWidth - (_padX * 2);
 
             // Title bar
-            Panel titleBar = new Panel();
-            titleBar.Dock = DockStyle.Top;
-            titleBar.Height = 40;
-            titleBar.BackColor = Theme.BgPanel;
-            titleBar.MouseDown += delegate(object s, MouseEventArgs e) { NativeDragHelper.DragWindow(Handle, e); };
+            _titleBar = new Panel();
+            _titleBar.Dock = DockStyle.Top;
+            _titleBar.Height = _titleBarH;
+            _titleBar.BackColor = pal.BackgroundPrimary;
+            _titleBar.MouseDown += delegate(object s, MouseEventArgs e) { NativeDragHelper.DragWindow(Handle, e); };
 
             Label titleLbl = new Label();
             titleLbl.Text = title ?? Loc.Get("PasswordRequired");
-            titleLbl.Font = Theme.FontBold;
-            titleLbl.ForeColor = Theme.TextPrimary;
-            titleLbl.Location = new Point(16, 10);
+            titleLbl.Font = DpiManager.GetFont(TypographyRole.BodyStrong, isRtl);
+            titleLbl.ForeColor = pal.TextPrimary;
             titleLbl.AutoSize = true;
-            titleBar.Controls.Add(titleLbl);
-            Controls.Add(titleBar);
+            titleLbl.Location = new Point(_padX, (_titleBarH - titleLbl.PreferredHeight) / 2);
+            _titleBar.Controls.Add(titleLbl);
 
-            // Prompt
-            Label descLbl = new Label();
-            descLbl.Text = _verifyCurrent ? (Loc.Get("EnterPassword") + "\n(" + _actionPrompt + ")") : _actionPrompt;
-            descLbl.ForeColor = Theme.TextSecondary;
-            descLbl.Location = new Point(20, 52);
-            descLbl.Size = new Size(420, 36);
-            Controls.Add(descLbl);
+            // Close button in title bar
+            Label closeBtn = new Label();
+            closeBtn.Text = "\u2715";
+            closeBtn.Font = new Font("Segoe UI", DpiManager.ScaleFloat(10f), FontStyle.Bold);
+            closeBtn.ForeColor = pal.TextMuted;
+            closeBtn.Size = new Size(DpiManager.ScaleInt(28), DpiManager.ScaleInt(28));
+            closeBtn.TextAlign = ContentAlignment.MiddleCenter;
+            closeBtn.Cursor = Cursors.Hand;
+            closeBtn.MouseEnter += delegate { closeBtn.ForeColor = pal.Danger; };
+            closeBtn.MouseLeave += delegate { closeBtn.ForeColor = pal.TextMuted; };
+            closeBtn.Click += delegate { DialogResult = DialogResult.Cancel; Close(); };
+            int closeX = isRtl ? DpiManager.ScaleInt(10) : (dlgWidth - DpiManager.ScaleInt(38));
+            closeBtn.Location = new Point(closeX, (_titleBarH - closeBtn.Height) / 2);
+            _titleBar.Controls.Add(closeBtn);
+
+            Controls.Add(_titleBar);
+
+            // Prompt description label (word-wrapped and measured)
+            _descLbl = new Label();
+            _descLbl.Text = _verifyCurrent ? (Loc.Get("EnterPassword") + "\n(" + _actionPrompt + ")") : _actionPrompt;
+            _descLbl.ForeColor = pal.TextSecondary;
+            _descLbl.Font = DpiManager.GetFont(TypographyRole.Body, isRtl);
+            _descLbl.AutoSize = false;
+            Size measuredDesc = TextRenderer.MeasureText(_descLbl.Text, _descLbl.Font,
+                new Size(_contentWidth, int.MaxValue),
+                TextFormatFlags.WordBreak | (isRtl ? (TextFormatFlags.Right | TextFormatFlags.RightToLeft) : TextFormatFlags.Left));
+            _descLbl.Size = new Size(_contentWidth, Math.Max(DpiManager.ScaleInt(38), measuredDesc.Height + DpiManager.ScaleInt(6)));
+            Controls.Add(_descLbl);
 
             // TextBox
             _pwBox = new TextBox();
             _pwBox.PasswordChar = '\u2022';
-            _pwBox.BackColor = Theme.BgCard;
-            _pwBox.ForeColor = Theme.TextPrimary;
+            _pwBox.BackColor = pal.SurfaceElevated;
+            _pwBox.ForeColor = pal.TextPrimary;
             _pwBox.BorderStyle = BorderStyle.FixedSingle;
-            _pwBox.Font = new Font("Segoe UI", 11f);
-            _pwBox.Location = new Point(20, 96);
-            _pwBox.Size = new Size(420, 30);
+            _pwBox.Font = new Font("Segoe UI", DpiManager.ScaleFloat(11.5f));
+            _pwBox.Size = new Size(_contentWidth, DpiManager.ScaleInt(32));
             _pwBox.KeyDown += delegate(object s, KeyEventArgs e)
             {
                 if (e.KeyCode == Keys.Enter) Submit();
+                else if (e.KeyCode == Keys.Escape) { DialogResult = DialogResult.Cancel; Close(); }
             };
             Controls.Add(_pwBox);
 
-            // Error message
+            // Error message (word-wrapped, dynamic)
             _errorLabel = new Label();
-            _errorLabel.ForeColor = Theme.AccentRed;
-            _errorLabel.Font = Theme.FontSmall;
-            _errorLabel.Location = new Point(20, 134);
-            _errorLabel.Size = new Size(420, 20);
+            _errorLabel.ForeColor = pal.Danger;
+            _errorLabel.Font = DpiManager.GetFont(TypographyRole.Caption, isRtl);
+            _errorLabel.AutoSize = true;
+            _errorLabel.MaximumSize = new Size(_contentWidth, 0);
             Controls.Add(_errorLabel);
 
             // Buttons
-            ModernButton submitBtn = new ModernButton();
-            submitBtn.Text = (RightToLeft == RightToLeft.Yes) ? "تأكيد" : "Confirm";
-            submitBtn.ButtonStyle = ModernButtonStyle.Primary;
-            submitBtn.Size = new Size(100, 34);
-            submitBtn.Location = new Point(Width - 120, 180);
-            submitBtn.Click += delegate { Submit(); };
+            int btnW = DpiManager.ScaleInt(106);
+            _submitBtn = new ModernButton();
+            _submitBtn.Text = isRtl ? "تأكيد" : "Confirm";
+            _submitBtn.ButtonStyle = ModernButtonStyle.Primary;
+            _submitBtn.Size = new Size(btnW, _btnH);
+            _submitBtn.Click += delegate { Submit(); };
 
-            ModernButton cancelBtn = new ModernButton();
-            cancelBtn.Text = (RightToLeft == RightToLeft.Yes) ? "إلغاء" : "Cancel";
-            cancelBtn.ButtonStyle = ModernButtonStyle.Secondary;
-            cancelBtn.Size = new Size(90, 34);
-            cancelBtn.Location = new Point(Width - 220, 180);
-            cancelBtn.Click += delegate { DialogResult = DialogResult.Cancel; Close(); };
+            _cancelBtn = new ModernButton();
+            _cancelBtn.Text = isRtl ? "إلغاء" : "Cancel";
+            _cancelBtn.ButtonStyle = ModernButtonStyle.Secondary;
+            _cancelBtn.Size = new Size(btnW, _btnH);
+            _cancelBtn.Click += delegate { DialogResult = DialogResult.Cancel; Close(); };
 
-            Controls.Add(submitBtn);
-            Controls.Add(cancelBtn);
+            Controls.Add(_submitBtn);
+            Controls.Add(_cancelBtn);
+
+            UpdateDynamicLayout(dlgWidth);
+        }
+
+        private void UpdateDynamicLayout(int dlgWidth)
+        {
+            bool isRtl = RightToLeft == RightToLeft.Yes;
+            int curY = _titleBarH + _padY;
+
+            _descLbl.Location = new Point(_padX, curY);
+            curY += _descLbl.Height + _gap;
+
+            _pwBox.Location = new Point(_padX, curY);
+            curY += _pwBox.Height + DpiManager.ScaleInt(8);
+
+            int errH = 0;
+            if (!string.IsNullOrEmpty(_errorLabel.Text))
+            {
+                _errorLabel.Visible = true;
+                _errorLabel.Location = new Point(_padX, curY);
+                errH = _errorLabel.Height;
+                curY += errH + _gap;
+            }
+            else
+            {
+                _errorLabel.Visible = false;
+                curY += DpiManager.ScaleInt(6);
+            }
+
+            int btnY = curY + DpiManager.ScaleInt(8);
+            int btnW = _submitBtn.Width;
+            int btnGap = DpiManager.ScaleInt(10);
+
+            if (isRtl)
+            {
+                // In RTL, Confirm is at the right edge, Cancel is to its left
+                _submitBtn.Location = new Point(dlgWidth - _padX - btnW, btnY);
+                _cancelBtn.Location = new Point(dlgWidth - _padX - (btnW * 2) - btnGap, btnY);
+            }
+            else
+            {
+                // In LTR, Confirm is on the right, Cancel is to its left
+                _submitBtn.Location = new Point(dlgWidth - _padX - btnW, btnY);
+                _cancelBtn.Location = new Point(dlgWidth - _padX - (btnW * 2) - btnGap, btnY);
+            }
+
+            int totalH = btnY + _btnH + _padY;
+            ClientSize = new Size(dlgWidth, totalH);
+        }
+
+        protected override bool ProcessDialogKey(Keys keyData)
+        {
+            if (keyData == Keys.Escape)
+            {
+                DialogResult = DialogResult.Cancel;
+                Close();
+                return true;
+            }
+            return base.ProcessDialogKey(keyData);
+        }
+
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            if (_pwBox != null)
+            {
+                _pwBox.Focus();
+                _pwBox.SelectAll();
+            }
         }
 
         private void Submit()
@@ -1908,6 +2017,7 @@ namespace UsbShieldPro
             if (string.IsNullOrEmpty(input))
             {
                 _errorLabel.Text = Loc.Get("WrongPassword");
+                UpdateDynamicLayout(Width);
                 return;
             }
 
@@ -1935,6 +2045,7 @@ namespace UsbShieldPro
             else
             {
                 _errorLabel.Text = Loc.Get("WrongPassword");
+                UpdateDynamicLayout(Width);
                 _pwBox.SelectAll();
                 _pwBox.Focus();
             }
@@ -1943,8 +2054,11 @@ namespace UsbShieldPro
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            using (Pen p = new Pen(Theme.Border, 1f))
+            IThemePalette pal = ThemeManager.ActivePalette;
+            using (Pen p = new Pen(pal.Border, 1f))
+            {
                 e.Graphics.DrawRectangle(p, 0, 0, Width - 1, Height - 1);
+            }
         }
     }
 
@@ -3132,9 +3246,93 @@ namespace UsbShieldPro
     public class ActivityRecord
     {
         private Color? _badgeColor;
+        private DateTime _timestampUtc;
+        private string _timestampIso;
 
         public string Id { get; set; }
-        public DateTime Timestamp { get; set; }
+
+        /// <summary>
+        /// Authoritative event timestamp stored as UTC.
+        /// Any assignment (Local, UTC, or Unspecified) is normalized to UTC.
+        /// </summary>
+        public DateTime Timestamp
+        {
+            get { return _timestampUtc; }
+            set
+            {
+                if (value.Kind == DateTimeKind.Local)
+                    _timestampUtc = value.ToUniversalTime();
+                else if (value.Kind == DateTimeKind.Utc)
+                    _timestampUtc = value;
+                else
+                    _timestampUtc = DateTime.SpecifyKind(value, DateTimeKind.Utc);
+
+                _timestampIso = _timestampUtc.ToString("yyyy-MM-ddTHH:mm:ss.fffffffZ");
+            }
+        }
+
+        /// <summary>
+        /// Explicit ISO-8601 UTC contract representation (e.g. 2026-11-13T17:10:00.0000000Z).
+        /// </summary>
+        public string TimestampIso
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(_timestampIso))
+                {
+                    _timestampIso = _timestampUtc.ToString("yyyy-MM-ddTHH:mm:ss.fffffffZ");
+                }
+                return _timestampIso;
+            }
+            set
+            {
+                _timestampIso = value;
+                if (!string.IsNullOrEmpty(value))
+                {
+                    DateTime parsed;
+                    if (DateTime.TryParse(value, null, System.Globalization.DateTimeStyles.RoundtripKind, out parsed))
+                    {
+                        _timestampUtc = (parsed.Kind == DateTimeKind.Local) ? parsed.ToUniversalTime() : parsed;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Local representation converted to current local timezone exactly once for presentation.
+        /// </summary>
+        [System.Web.Script.Serialization.ScriptIgnore]
+        public DateTime LocalTimestamp
+        {
+            get
+            {
+                DateTime utc = (_timestampUtc.Kind == DateTimeKind.Utc)
+                    ? _timestampUtc
+                    : DateTime.SpecifyKind(_timestampUtc, DateTimeKind.Utc);
+                return utc.ToLocalTime();
+            }
+        }
+
+        public DateTime GetPresentationTimestamp(TimeZoneInfo timeZone = null)
+        {
+            DateTime utc = (_timestampUtc.Kind == DateTimeKind.Utc)
+                ? _timestampUtc
+                : DateTime.SpecifyKind(_timestampUtc, DateTimeKind.Utc);
+            if (timeZone == null)
+            {
+                return utc.ToLocalTime();
+            }
+            return TimeZoneInfo.ConvertTimeFromUtc(utc, timeZone);
+        }
+
+        // Structured language-neutral event schema
+        public string EventCode { get; set; }
+        public string DeviceName { get; set; }
+        public string DeviceId { get; set; }
+        public string DetailParameter { get; set; }
+        public string BadgeKey { get; set; }
+        public string ContextKey { get; set; }
+
         public string Title { get; set; }
         public string Context { get; set; }
         public ActivityCategory Category { get; set; }
@@ -3163,7 +3361,7 @@ namespace UsbShieldPro
         public ActivityRecord()
         {
             Id = Guid.NewGuid().ToString("N");
-            Timestamp = DateTime.Now;
+            Timestamp = DateTime.UtcNow;
             Title = "";
             Context = "";
             Category = ActivityCategory.Devices;
@@ -3191,6 +3389,110 @@ namespace UsbShieldPro
             Category = category;
             ResultBadge = badge ?? "";
             BadgeColor = badgeColor.HasValue ? badgeColor.Value : Theme.AccentBlue;
+        }
+
+        public ActivityRecord(DateTime time, string eventCode, string deviceName, string deviceId, string detailParam, ActivityCategory category, string badgeKey, Color? badgeColor, string contextKey = "", string legacyTitleFallback = "", string legacyContextFallback = "")
+        {
+            Id = Guid.NewGuid().ToString("N");
+            Timestamp = time;
+            EventCode = eventCode;
+            DeviceName = deviceName ?? "";
+            DeviceId = deviceId ?? "";
+            DetailParameter = detailParam ?? "";
+            Category = category;
+            BadgeKey = badgeKey ?? "";
+            BadgeColor = badgeColor.HasValue ? badgeColor.Value : Theme.AccentBlue;
+            ContextKey = contextKey ?? "";
+            Title = !string.IsNullOrEmpty(legacyTitleFallback) ? legacyTitleFallback : GetLocalizedTitle();
+            Context = !string.IsNullOrEmpty(legacyContextFallback) ? legacyContextFallback : GetLocalizedContext();
+            ResultBadge = GetLocalizedBadge();
+        }
+
+        public string GetLocalizedTitle()
+        {
+            if (string.IsNullOrEmpty(EventCode))
+            {
+                return Title ?? "";
+            }
+
+            string dev = !string.IsNullOrEmpty(DeviceName) ? DeviceName : (!string.IsNullOrEmpty(DeviceId) ? DeviceId : "USB Storage");
+            bool isAr = (Loc.Current == Language.Arabic);
+
+            switch (EventCode)
+            {
+                case "DEVICE_DETECTED":
+                    return string.Format(Loc.Get("EventDeviceDetected"), dev);
+                case "DEVICE_CONNECTED":
+                    return string.Format(Loc.Get("EventDeviceConnected"), dev);
+                case "DEVICE_ALLOWED_TRUSTED":
+                    return string.Format(Loc.Get("EventDeviceAllowed"), dev);
+                case "DEVICE_DISCONNECTED":
+                    return string.Format(Loc.Get("EventDeviceDisconnected"), dev);
+                case "DEVICE_UNPLUGGED_EJECTED":
+                    return string.Format(Loc.Get("EventDeviceUnpluggedEjected"), dev);
+                case "DEVICE_READ_ONLY":
+                    return isAr
+                        ? string.Format("وسائط تخزين '{0}' محمية من الكتابة (للقراءة فقط).", dev)
+                        : string.Format("Removable storage '{0}' write-protected (Read-Only).", dev);
+                case "DEVICE_BLOCKED":
+                    return isAr
+                        ? string.Format("تم رفض الوصول: تم حظر '{0}' بواسطة السياسة.", dev)
+                        : string.Format("Access denied: '{0}' blocked by policy.", dev);
+                case "SAFE_EJECT_PREPARING":
+                    return string.Format("{0}: {1}", dev, Loc.Get("SafeEjectPreparing"));
+                case "SAFE_EJECT_SUCCESS":
+                    return string.Format("{0}: {1}", dev, Loc.Get("SafeEjectSuccessStatus"));
+                case "SAFE_EJECT_FAILED":
+                    if (!string.IsNullOrEmpty(DetailParameter))
+                        return string.Format("{0}: {1} ({2})", dev, Loc.Get("SafeEjectFailedStatus"), DetailParameter);
+                    return string.Format("{0}: {1}", dev, Loc.Get("SafeEjectFailedStatus"));
+                case "SERVICE_STARTED":
+                    return isAr ? "بدء تشغيل خدمة USB Shield Pro." : "USB Shield Pro service started.";
+                case "SERVICE_STOPPED":
+                    return isAr ? "إيقاف خدمة USB Shield Pro." : "USB Shield Pro service stopped.";
+                case "POLICY_APPLIED":
+                    return string.Format(Loc.Get("EventPolicyApplied"), !string.IsNullOrEmpty(DetailParameter) ? DetailParameter : "1");
+                case "POLICY_CHANGED":
+                    return Loc.Get("EventPolicyChanged");
+                case "TEMP_ACCESS_STARTED":
+                    return string.Format(Loc.Get("EventTempAccessStarted"), !string.IsNullOrEmpty(DetailParameter) ? DetailParameter : "15");
+                case "TEMP_ACCESS_EXPIRED":
+                    return Loc.Get("EventTempAccessExpired");
+                case "AUTOLOCK_ENFORCED":
+                    return Loc.Get("EventAutoLockEnforced");
+                case "RECOVERY_KEY_AUTH":
+                    return Loc.Get("EventRecoveryKeyAuth");
+                case "DEVICE_REVOKED":
+                    return string.Format(Loc.Get("EventDeviceRevoked"), dev);
+                default:
+                    return !string.IsNullOrEmpty(Title) ? Title : EventCode;
+            }
+        }
+
+        public string GetLocalizedBadge()
+        {
+            if (!string.IsNullOrEmpty(BadgeKey))
+            {
+                string loc = Loc.Get(BadgeKey);
+                if (!string.IsNullOrEmpty(loc) && loc != BadgeKey)
+                {
+                    return loc;
+                }
+            }
+            return ResultBadge ?? "";
+        }
+
+        public string GetLocalizedContext()
+        {
+            if (!string.IsNullOrEmpty(ContextKey))
+            {
+                string loc = Loc.Get(ContextKey);
+                if (!string.IsNullOrEmpty(loc) && loc != ContextKey)
+                {
+                    return loc;
+                }
+            }
+            return Context ?? "";
         }
     }
 
@@ -3233,7 +3535,10 @@ namespace UsbShieldPro
                 g.DrawLine(divPen, 16, Height - 1, Width - 16, Height - 1);
 
             bool isRtl = RightToLeft == RightToLeft.Yes;
-            string timeStr = _record.Timestamp.ToString("HH:mm:ss");
+            string timeStr = _record.LocalTimestamp.ToString("HH:mm:ss");
+            string localizedTitle = _record.GetLocalizedTitle();
+            string localizedCtx = _record.GetLocalizedContext();
+            string localizedBadge = _record.GetLocalizedBadge();
 
             if (isRtl)
             {
@@ -3249,9 +3554,9 @@ namespace UsbShieldPro
                 curX -= 72;
 
                 // Title & Context
-                string mainText = _record.Title;
-                if (!string.IsNullOrEmpty(_record.Context))
-                    mainText += "  (" + _record.Context + ")";
+                string mainText = localizedTitle;
+                if (!string.IsNullOrEmpty(localizedCtx))
+                    mainText += "  (" + localizedCtx + ")";
 
                 int titleW = curX - 120;
                 if (titleW < 100) titleW = 100;
@@ -3259,7 +3564,7 @@ namespace UsbShieldPro
                     g.DrawString(mainText, Theme.FontNormal, tb, new RectangleF(curX - titleW, 0, titleW, Height), sfRight);
 
                 // Badge on Left side
-                if (!string.IsNullOrEmpty(_record.ResultBadge))
+                if (!string.IsNullOrEmpty(localizedBadge))
                 {
                     int badgeW = 90;
                     Rectangle badgeRect = new Rectangle(16, (Height - 20) / 2, badgeW, 20);
@@ -3273,7 +3578,7 @@ namespace UsbShieldPro
                     sfCenter.LineAlignment = StringAlignment.Center;
                     sfCenter.Alignment = StringAlignment.Center;
                     using (SolidBrush btb = new SolidBrush(bColor))
-                        g.DrawString(_record.ResultBadge, Theme.FontSmall, btb, badgeRect, sfCenter);
+                        g.DrawString(localizedBadge, Theme.FontSmall, btb, badgeRect, sfCenter);
                 }
             }
             else
@@ -3289,18 +3594,18 @@ namespace UsbShieldPro
                 curX += 68;
 
                 // Title & Context
-                string mainText = _record.Title;
-                if (!string.IsNullOrEmpty(_record.Context))
-                    mainText += "  (" + _record.Context + ")";
+                string mainText = localizedTitle;
+                if (!string.IsNullOrEmpty(localizedCtx))
+                    mainText += "  (" + localizedCtx + ")";
 
-                int badgeW = !string.IsNullOrEmpty(_record.ResultBadge) ? 100 : 0;
+                int badgeW = !string.IsNullOrEmpty(localizedBadge) ? 100 : 0;
                 int titleW = Width - curX - badgeW - 24;
                 if (titleW < 100) titleW = 100;
                 using (SolidBrush tb = new SolidBrush(Theme.TextPrimary))
                     g.DrawString(mainText, Theme.FontNormal, tb, new RectangleF(curX, 0, titleW, Height), sfLeft);
 
                 // Badge on Right side
-                if (!string.IsNullOrEmpty(_record.ResultBadge))
+                if (!string.IsNullOrEmpty(localizedBadge))
                 {
                     Rectangle badgeRect = new Rectangle(Width - 16 - 90, (Height - 20) / 2, 90, 20);
                     Color bColor = _record.BadgeColor;
@@ -3313,7 +3618,7 @@ namespace UsbShieldPro
                     sfCenter.LineAlignment = StringAlignment.Center;
                     sfCenter.Alignment = StringAlignment.Center;
                     using (SolidBrush btb = new SolidBrush(bColor))
-                        g.DrawString(_record.ResultBadge, Theme.FontSmall, btb, badgeRect, sfCenter);
+                        g.DrawString(localizedBadge, Theme.FontSmall, btb, badgeRect, sfCenter);
                 }
             }
         }

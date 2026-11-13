@@ -491,14 +491,20 @@ namespace UsbShieldPro.Devices
                     try
                     {
                         string devName = !string.IsNullOrEmpty(dev.FriendlyName) ? dev.FriendlyName : "USB Storage";
+                        string devId = dev.DeviceInstanceId ?? dev.SerialNumber ?? devName;
                         string detectText = string.Format(Loc.Get("EventDeviceDetected"), devName);
                         ActivityRepository.AppendRecord(new ActivityRecord(
-                            DateTime.Now,
-                            detectText,
+                            DateTime.UtcNow,
+                            "DEVICE_DETECTED",
+                            devName,
+                            devId,
+                            "",
                             ActivityCategory.DeviceEvents,
-                            Loc.Get("BadgeDetected"),
+                            "BadgeDetected",
                             Theme.AccentBlue,
-                            dev.DeviceInstanceId ?? dev.SerialNumber ?? devName));
+                            "",
+                            detectText,
+                            devId));
                     }
                     catch { }
                 }
@@ -578,14 +584,20 @@ namespace UsbShieldPro.Devices
                         {
                             try
                             {
+                                string devId = dev.DeviceInstanceId ?? dev.SerialNumber ?? dev.FriendlyName;
                                 string allowText = string.Format(Loc.Get("EventDeviceAllowed"), dev.FriendlyName);
                                 ActivityRepository.AppendRecord(new ActivityRecord(
-                                    DateTime.Now,
-                                    allowText,
+                                    DateTime.UtcNow,
+                                    "DEVICE_ALLOWED_TRUSTED",
+                                    dev.FriendlyName,
+                                    devId,
+                                    "",
                                     ActivityCategory.DeviceEvents,
-                                    Loc.Get("BadgeVerified"),
+                                    "BadgeVerified",
                                     Theme.AccentGreen,
-                                    dev.DeviceInstanceId ?? dev.SerialNumber));
+                                    "",
+                                    allowText,
+                                    devId));
                             }
                             catch { }
                         }
@@ -602,14 +614,20 @@ namespace UsbShieldPro.Devices
                             if (lifecycleRec != null) lifecycleRec.ArrivalLogged = true;
                             try
                             {
+                                string devId = dev.DeviceInstanceId ?? dev.SerialNumber ?? dev.FriendlyName;
                                 string connectText = string.Format(Loc.Get("EventDeviceConnected"), dev.FriendlyName);
                                 ActivityRepository.AppendRecord(new ActivityRecord(
-                                    DateTime.Now,
-                                    connectText,
+                                    DateTime.UtcNow,
+                                    "DEVICE_CONNECTED",
+                                    dev.FriendlyName,
+                                    devId,
+                                    "",
                                     ActivityCategory.DeviceEvents,
-                                    Loc.Get("BadgeConnected"),
+                                    "BadgeConnected",
                                     Theme.AccentBlue,
-                                    dev.DeviceInstanceId ?? dev.SerialNumber));
+                                    "",
+                                    connectText,
+                                    devId));
                             }
                             catch { }
                         }
@@ -627,27 +645,38 @@ namespace UsbShieldPro.Devices
                         if (lifecycleRec != null) lifecycleRec.ArrivalLogged = true;
                         try
                         {
+                            string devId = dev.DeviceInstanceId ?? dev.SerialNumber ?? dev.FriendlyName;
                             if (eval.RecommendedAction == RuleAction.ReadOnly)
                             {
                                 string roText = string.Format("Removable storage '{0}' write-protected (Read-Only).", dev.FriendlyName);
                                 ActivityRepository.AppendRecord(new ActivityRecord(
-                                    DateTime.Now,
-                                    roText,
+                                    DateTime.UtcNow,
+                                    "DEVICE_READ_ONLY",
+                                    dev.FriendlyName,
+                                    devId,
+                                    eval.EvaluationReason ?? "",
                                     ActivityCategory.Protection,
-                                    Loc.Get("BadgeReadOnly"),
+                                    "BadgeReadOnly",
                                     Theme.AccentOrange,
-                                    eval.EvaluationReason ?? dev.DeviceInstanceId));
+                                    "",
+                                    roText,
+                                    eval.EvaluationReason ?? devId));
                             }
                             else
                             {
                                 string blockText = string.Format("Access denied: '{0}' blocked by policy.", dev.FriendlyName);
                                 ActivityRepository.AppendRecord(new ActivityRecord(
-                                    DateTime.Now,
-                                    blockText,
+                                    DateTime.UtcNow,
+                                    "DEVICE_BLOCKED",
+                                    dev.FriendlyName,
+                                    devId,
+                                    eval.EvaluationReason ?? "",
                                     ActivityCategory.Protection,
-                                    Loc.Get("BadgeBlocked"),
+                                    "BadgeBlocked",
                                     Theme.AccentOrange,
-                                    eval.EvaluationReason ?? dev.DeviceInstanceId));
+                                    "",
+                                    blockText,
+                                    eval.EvaluationReason ?? devId));
                             }
                         }
                         catch { }
@@ -904,15 +933,21 @@ namespace UsbShieldPro.Devices
                                 try
                                 {
                                     string prepName = (dev != null && !string.IsNullOrEmpty(dev.FriendlyName)) ? dev.FriendlyName : "USB Storage";
+                                    string devId = (dev != null) ? (dev.DeviceInstanceId ?? dev.SerialNumber ?? prepName) : prepName;
                                     string prepStatus = Loc.Get("SafeEjectPreparing");
                                     string prepText = string.Format("{0}: {1}", prepName, prepStatus);
                                     ActivityRepository.AppendRecord(new ActivityRecord(
-                                        DateTime.Now,
-                                        prepText,
+                                        DateTime.UtcNow,
+                                        "SAFE_EJECT_PREPARING",
+                                        prepName,
+                                        devId,
+                                        "",
                                         ActivityCategory.DeviceEvents,
-                                        Loc.Get("BadgeReactiveAutoEject"),
+                                        "BadgeReactiveAutoEject",
                                         Theme.AccentOrange,
-                                        dev.DeviceInstanceId ?? dev.SerialNumber ?? prepName));
+                                        "",
+                                        prepText,
+                                        devId));
                                 }
                                 catch { }
 
@@ -1200,7 +1235,22 @@ namespace UsbShieldPro.Devices
                 Color color = success ? Theme.AccentGreen : Theme.AccentRed;
                 string context = !string.IsNullOrEmpty(msg) ? msg : name;
 
-                ActivityRepository.AppendRecord(new ActivityRecord(DateTime.Now, activityText, cat, badge, color, context));
+                string eventCode = success ? "SAFE_EJECT_SUCCESS" : "SAFE_EJECT_FAILED";
+                string badgeKey = success ? "BadgeSuccess" : "BadgeFailed";
+                string devId = (dev != null) ? (dev.DeviceInstanceId ?? dev.SerialNumber ?? name) : name;
+
+                ActivityRepository.AppendRecord(new ActivityRecord(
+                    DateTime.UtcNow,
+                    eventCode,
+                    name,
+                    devId,
+                    msg ?? "",
+                    cat,
+                    badgeKey,
+                    color,
+                    "",
+                    activityText,
+                    context));
             }
             catch { }
 

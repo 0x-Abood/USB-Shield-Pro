@@ -72,7 +72,8 @@ namespace UsbShieldPro.UI
             _badge = new StatusBadge();
             _badge.TabStop = false;
             _badge.Variant = DetermineBadgeVariant(_record);
-            _badge.Text = !string.IsNullOrEmpty(_record.ResultBadge) ? _record.ResultBadge : GetCategoryFallbackBadge(_record.Category);
+            string initialBadge = _record.GetLocalizedBadge();
+            _badge.Text = !string.IsNullOrEmpty(initialBadge) ? initialBadge : GetCategoryFallbackBadge(_record.Category);
             _badge.Click += OnSubControlClick;
 
             // Sub-control: View Details Button
@@ -199,7 +200,8 @@ namespace UsbShieldPro.UI
 
             _badge.RightToLeft = isRtl ? RightToLeft.Yes : RightToLeft.No;
             _badge.Variant = DetermineBadgeVariant(_record);
-            _badge.Text = !string.IsNullOrEmpty(_record.ResultBadge) ? _record.ResultBadge : GetCategoryFallbackBadge(_record.Category);
+            string locBadge = _record.GetLocalizedBadge();
+            _badge.Text = !string.IsNullOrEmpty(locBadge) ? locBadge : GetCategoryFallbackBadge(_record.Category);
 
             _detailsBtn.Text = Loc.Get("ViewDetails");
             Font btnFont = DpiManager.GetFont(TypographyRole.Caption, isRtl);
@@ -361,7 +363,7 @@ namespace UsbShieldPro.UI
             Color semanticColor = GetSemanticColor(_record, pal);
 
             // 5. Time String & Semantic Status Indicator
-            string timeStr = _record.Timestamp.ToString("HH:mm:ss");
+            string timeStr = _record.LocalTimestamp.ToString("HH:mm:ss");
             Font timeFont = DpiManager.GetFont(TypographyRole.Caption, isRtl);
             int timeW = Math.Max(DpiManager.ScaleInt(54), TextRenderer.MeasureText(timeStr, timeFont).Width);
             int timeH = DpiManager.ScaleInt(isRtl ? 20 : 18);
@@ -438,9 +440,10 @@ namespace UsbShieldPro.UI
                 flags |= TextFormatFlags.Left;
             }
 
-            TextRenderer.DrawText(g, _record.Title ?? "", titleFont, titleRect, pal.TextPrimary, flags);
+            TextRenderer.DrawText(g, _record.GetLocalizedTitle(), titleFont, titleRect, pal.TextPrimary, flags);
 
-            string subtitle = !string.IsNullOrEmpty(_record.Context) ? _record.Context : GetCategoryFallbackBadge(_record.Category);
+            string ctx = _record.GetLocalizedContext();
+            string subtitle = !string.IsNullOrEmpty(ctx) ? ctx : GetCategoryFallbackBadge(_record.Category);
             TextRenderer.DrawText(g, subtitle, subFont, subRect, pal.TextSecondary, flags);
         }
 

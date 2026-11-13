@@ -7,7 +7,7 @@ namespace UsbShieldPro.Installer
 {
     internal static class PayloadManifest
     {
-        public static long ExpectedExeLength = 1096192L;
-        public static string ExpectedExeSha256 = "96019AEECE0E8B59CE08EA9D6EBBEEF89842114D4A562B9CDC5C6D06F74A4FC5";
+        public static long ExpectedExeLength = 1107968L;
+        public static string ExpectedExeSha256 = "68ED07B1112F761D0C5B6F2D7815B9BA083F33B8FE33DA30724726C3350B9431";
     }
 }
