@@ -33,8 +33,8 @@ namespace UsbShieldPro.Installer
 {
     internal static class Program
     {
-        public const string EXPECTED_EXE_SHA256 = "C0EDC176CCAD5CB490933F8FCE8D94141D67E31B49E6A80DCAF88E772ACE8311";
-        public const long EXPECTED_EXE_LENGTH = 1076736L;
+        public static string EXPECTED_EXE_SHA256 { get { return PayloadManifest.ExpectedExeSha256; } }
+        public static long EXPECTED_EXE_LENGTH { get { return PayloadManifest.ExpectedExeLength; } }
 
         public const string APP_NAME = "USB Shield Pro";
         public const string APP_VERSION = "2.1.0";
@@ -293,6 +293,23 @@ namespace UsbShieldPro.Installer
             return ok;
         }
 
+        private static void MoveFileWithRetry(string source, string destination, int maxRetries = 3)
+        {
+            for (int i = 0; i <= maxRetries; i++)
+            {
+                try
+                {
+                    File.Move(source, destination);
+                    return;
+                }
+                catch (IOException)
+                {
+                    if (i == maxRetries) throw;
+                    Thread.Sleep(500);
+                }
+            }
+        }
+
         public static bool PerformInstall(bool createDesktopShortcut, bool launchAfter, Action<int, string> progress, out InstallDiagnosticReport report)
         {
             report = new InstallDiagnosticReport { Success = false };
@@ -302,12 +319,43 @@ namespace UsbShieldPro.Installer
             string currentPhase = "Initializing";
             int phaseNumber = 0;
 
+            string destExe = Path.Combine(targetDir, "UsbShieldPro.exe");
+            string stageExe = Path.Combine(targetDir, "UsbShieldPro.exe.stage");
+            string backupExe = Path.Combine(targetDir, "UsbShieldPro.exe.bak");
+
+            string destConfig = Path.Combine(targetDir, "UsbShieldPro.exe.config");
+            string stageConfig = Path.Combine(targetDir, "UsbShieldPro.exe.config.stage");
+            string backupConfig = Path.Combine(targetDir, "UsbShieldPro.exe.config.bak");
+
+            string destReadme = Path.Combine(targetDir, "README.txt");
+            string stageReadme = Path.Combine(targetDir, "README.txt.stage");
+            string backupReadme = Path.Combine(targetDir, "README.txt.bak");
+
+            bool wasUpgrade = File.Exists(destExe);
+            bool wasServiceRunning = false;
+            bool exeSwapped = false;
+            bool configSwapped = false;
+            bool readmeSwapped = false;
+
             try
             {
                 // Step 1: Stopping existing processes
                 phaseNumber = 1;
                 currentPhase = "Stopping running USB Shield Pro instances";
                 progress(15, currentPhase + "...");
+
+                try
+                {
+                    using (var sc = new ServiceController(SERVICE_NAME))
+                    {
+                        if (sc.Status == ServiceControllerStatus.Running || sc.Status == ServiceControllerStatus.StartPending)
+                        {
+                            wasServiceRunning = true;
+                        }
+                    }
+                }
+                catch { }
+
                 StopRunningProcesses();
                 Thread.Sleep(500);
 
@@ -320,11 +368,16 @@ namespace UsbShieldPro.Installer
                     Directory.CreateDirectory(targetDir);
                 }
 
-                // Step 3: Extract & Verify UsbShieldPro.exe
+                // Clean up any stale staging files
+                try { if (File.Exists(stageExe)) File.Delete(stageExe); } catch { }
+                try { if (File.Exists(stageConfig)) File.Delete(stageConfig); } catch { }
+                try { if (File.Exists(stageReadme)) File.Delete(stageReadme); } catch { }
+
+                // Step 3: Extract & Verify Stage UsbShieldPro.exe
                 phaseNumber = 3;
                 currentPhase = "Extracting and verifying core executable";
                 progress(50, currentPhase + "...");
-                string destExe = Path.Combine(targetDir, "UsbShieldPro.exe");
+
                 using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("UsbShieldPro.exe"))
                 {
                     if (stream == null)
@@ -363,36 +416,58 @@ namespace UsbShieldPro.Installer
                         return false;
                     }
 
-                    try
+                    // Write to validated stage file first
+                    using (var fs = new FileStream(stageExe, FileMode.Create, FileAccess.Write, FileShare.None))
                     {
-                        File.WriteAllBytes(destExe, data);
+                        fs.Write(data, 0, data.Length);
+                        fs.Flush(true);
                     }
-                    catch (IOException)
+
+                    // Verify staged disk file length
+                    FileInfo stageFi = new FileInfo(stageExe);
+                    if (stageFi.Length != EXPECTED_EXE_LENGTH)
                     {
-                        // Resilient file overwrite for existing running process/lock
-                        string oldExe = destExe + ".old";
-                        try { if (File.Exists(oldExe)) File.Delete(oldExe); } catch { }
-                        try
-                        {
-                            File.Move(destExe, oldExe);
-                            File.WriteAllBytes(destExe, data);
-                        }
-                        catch
-                        {
-                            throw;
-                        }
+                        throw new IOException(string.Format("Staged executable disk length mismatch ({0} != {1})", stageFi.Length, EXPECTED_EXE_LENGTH));
                     }
                 }
 
-                // Step 4: Extract Config & Readme
+                // Step 4: Extract Config & Readme to Stage Files
                 phaseNumber = 4;
                 currentPhase = "Extracting application configuration and documentation";
                 progress(65, currentPhase + "...");
-                string destConfig = Path.Combine(targetDir, "UsbShieldPro.exe.config");
-                ExtractResourceToFile("UsbShieldPro.exe.config", destConfig);
+                ExtractResourceToFile("UsbShieldPro.exe.config", stageConfig);
+                ExtractResourceToFile("README.txt", stageReadme);
 
-                string destReadme = Path.Combine(targetDir, "README.txt");
-                ExtractResourceToFile("README.txt", destReadme);
+                // Perform Atomic/Reversible Swaps
+                if (File.Exists(destExe))
+                {
+                    try { if (File.Exists(backupExe)) File.Delete(backupExe); } catch { }
+                    MoveFileWithRetry(destExe, backupExe);
+                }
+                File.Move(stageExe, destExe);
+                exeSwapped = true;
+
+                if (File.Exists(stageConfig))
+                {
+                    if (File.Exists(destConfig))
+                    {
+                        try { if (File.Exists(backupConfig)) File.Delete(backupConfig); } catch { }
+                        MoveFileWithRetry(destConfig, backupConfig);
+                    }
+                    File.Move(stageConfig, destConfig);
+                    configSwapped = true;
+                }
+
+                if (File.Exists(stageReadme))
+                {
+                    if (File.Exists(destReadme))
+                    {
+                        try { if (File.Exists(backupReadme)) File.Delete(backupReadme); } catch { }
+                        MoveFileWithRetry(destReadme, backupReadme);
+                    }
+                    File.Move(stageReadme, destReadme);
+                    readmeSwapped = true;
+                }
 
                 // Copy Uninstaller
                 string destUninstaller = Path.Combine(targetDir, "Uninstall.exe");
@@ -429,6 +504,25 @@ namespace UsbShieldPro.Installer
                 progress(90, currentPhase + "...");
                 RegisterUninstallEntry(targetDir, destExe, destUninstaller);
 
+                // Restart service if it was running before upgrade
+                if (wasServiceRunning)
+                {
+                    try
+                    {
+                        using (var sc = new ServiceController(SERVICE_NAME))
+                        {
+                            sc.Start();
+                            sc.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(5));
+                        }
+                    }
+                    catch { }
+                }
+
+                // Commit: Clean up backups
+                try { if (File.Exists(backupExe)) File.Delete(backupExe); } catch { }
+                try { if (File.Exists(backupConfig)) File.Delete(backupConfig); } catch { }
+                try { if (File.Exists(backupReadme)) File.Delete(backupReadme); } catch { }
+
                 progress(100, "Installation complete!");
 
                 if (launchAfter)
@@ -445,6 +539,43 @@ namespace UsbShieldPro.Installer
             }
             catch (Exception ex)
             {
+                // ── ROLLBACK ON FAILURE ──
+                try
+                {
+                    try { if (File.Exists(stageExe)) File.Delete(stageExe); } catch { }
+                    try { if (File.Exists(stageConfig)) File.Delete(stageConfig); } catch { }
+                    try { if (File.Exists(stageReadme)) File.Delete(stageReadme); } catch { }
+
+                    if (exeSwapped && File.Exists(backupExe))
+                    {
+                        try { if (File.Exists(destExe)) File.Delete(destExe); } catch { }
+                        try { File.Move(backupExe, destExe); } catch { }
+                    }
+                    if (configSwapped && File.Exists(backupConfig))
+                    {
+                        try { if (File.Exists(destConfig)) File.Delete(destConfig); } catch { }
+                        try { File.Move(backupConfig, destConfig); } catch { }
+                    }
+                    if (readmeSwapped && File.Exists(backupReadme))
+                    {
+                        try { if (File.Exists(destReadme)) File.Delete(destReadme); } catch { }
+                        try { File.Move(backupReadme, destReadme); } catch { }
+                    }
+
+                    if (wasServiceRunning && File.Exists(destExe))
+                    {
+                        try
+                        {
+                            using (var sc = new ServiceController(SERVICE_NAME))
+                            {
+                                sc.Start();
+                            }
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+
                 report.Success = false;
                 report.FailedPhase = currentPhase;
                 report.PhaseNumber = phaseNumber;

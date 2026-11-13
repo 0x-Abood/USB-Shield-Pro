@@ -147,6 +147,11 @@ namespace UsbShieldPro.Security
                         fs.Flush(true);
                     }
 
+                    if (string.IsNullOrEmpty(SecurityAclHelper.BaseDirectoryOverride))
+                    {
+                        SecurityAclHelper.ApplySensitiveFileSecurity(temp);
+                    }
+
                     // 2. Atomic replacement with backup preservation
                     if (File.Exists(path))
                     {

@@ -1,45 +1,25 @@
 @echo off
+setlocal
 echo ============================================
-echo   USB Shield Pro v2.1.0 - Installer Build
+echo   USB Shield Pro - Dynamic Installer Build
 echo   (c) 2026 0xAbood. All rights reserved.
 echo ============================================
 echo.
 
-set CSC=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
-if not exist "%CSC%" set CSC=C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe
-if not exist "%CSC%" (
-    echo ERROR: Could not find csc.exe. Ensure .NET Framework 4.x is installed.
-    exit /b 1
-)
+set SCRIPT_DIR=%~dp0
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%package_installer.ps1" %*
+set EXIT_CODE=%ERRORLEVEL%
 
-echo Using compiler: %CSC%
-set ROOTDIR=%~dp0..
-set OUTDIR=%ROOTDIR%\release
-
-if not exist "%OUTDIR%" mkdir "%OUTDIR%"
-
-echo Compiling USB-Shield-Pro-v2.1.0-Setup.exe...
-
-"%CSC%" /target:winexe /out:"%OUTDIR%\USB-Shield-Pro-v2.1.0-Setup.exe" /win32manifest:"%ROOTDIR%\app.manifest" /win32icon:"%ROOTDIR%\Assets\Brand\UsbShieldPro.ico" /optimize+ /debug- /nologo ^
-  /reference:System.dll ^
-  /reference:System.Core.dll ^
-  /reference:System.Drawing.dll ^
-  /reference:System.Windows.Forms.dll ^
-  /reference:System.ServiceProcess.dll ^
-  /resource:"%OUTDIR%\USB-Shield-Pro-v2.1\UsbShieldPro.exe",UsbShieldPro.exe ^
-  /resource:"%OUTDIR%\USB-Shield-Pro-v2.1\UsbShieldPro.exe.config",UsbShieldPro.exe.config ^
-  /resource:"%OUTDIR%\USB-Shield-Pro-v2.1\README.txt",README.txt ^
-  "%~dp0SetupProgram.cs"
-
-if %ERRORLEVEL% NEQ 0 (
+if %EXIT_CODE% NEQ 0 (
     echo.
-    echo INSTALLER BUILD FAILED!
-    exit /b 1
+    echo ============================================
+    echo   INSTALLER BUILD FAILED! (Exit Code: %EXIT_CODE%)
+    echo ============================================
+    exit /b %EXIT_CODE%
 )
 
 echo.
 echo ============================================
-echo   INSTALLER BUILD SUCCESSFUL!
-echo   Output: %OUTDIR%\USB-Shield-Pro-v2.1.0-Setup.exe
+echo   INSTALLER BUILD COMPLETED SUCCESSFULLY!
 echo ============================================
-echo.
+exit /b 0
