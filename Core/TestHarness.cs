@@ -20478,36 +20478,93 @@ namespace UsbShieldPro.Core
                         }
                     }
 
-                    // 5. Real OS verification: Unprivileged access to read or tamper must be strictly DENIED by the kernel
-                    bool unprivilegedReadBlocked = false;
-                    try
+                    // 5. Verification of unprivileged access denial:
+                    // Invariant: Non-administrative principals (Authenticated Users / Everyone / Standard Users)
+                    // must have zero rights on sensitive files and zero write/create rights in the directory.
+                    FileInfo fInfo = new FileInfo(testAuthFile);
+                    var fSecurity = fInfo.GetAccessControl(System.Security.AccessControl.AccessControlSections.Access);
+                    bool fileInheritanceProtected = fSecurity.AreAccessRulesProtected;
+                    bool unauthorizedPrincipalFoundOnFile = false;
+
+                    var sidAdmins = new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.BuiltinAdministratorsSid, null);
+                    var sidSystem = new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.LocalSystemSid, null);
+
+                    foreach (System.Security.AccessControl.FileSystemAccessRule rule in fSecurity.GetAccessRules(true, false, typeof(System.Security.Principal.SecurityIdentifier)))
                     {
-                        byte[] probe = File.ReadAllBytes(testAuthFile);
-                        unprivilegedReadBlocked = false;
-                    }
-                    catch (UnauthorizedAccessException)
-                    {
-                        unprivilegedReadBlocked = true;
-                    }
-                    catch (Exception)
-                    {
-                        unprivilegedReadBlocked = true;
+                        var sid = rule.IdentityReference as System.Security.Principal.SecurityIdentifier;
+                        if (sid != sidAdmins && sid != sidSystem)
+                        {
+                            unauthorizedPrincipalFoundOnFile = true;
+                            break;
+                        }
                     }
 
-                    bool unprivilegedWriteBlocked = false;
-                    try
+                    // Directory must deny Authenticated Users write / create rights
+                    bool dirUsersHasWrite = false;
+                    var dangerousRights = System.Security.AccessControl.FileSystemRights.Write |
+                                          System.Security.AccessControl.FileSystemRights.CreateFiles |
+                                          System.Security.AccessControl.FileSystemRights.CreateDirectories |
+                                          System.Security.AccessControl.FileSystemRights.Delete |
+                                          System.Security.AccessControl.FileSystemRights.DeleteSubdirectoriesAndFiles |
+                                          System.Security.AccessControl.FileSystemRights.ChangePermissions |
+                                          System.Security.AccessControl.FileSystemRights.TakeOwnership;
+
+                    foreach (System.Security.AccessControl.FileSystemAccessRule rule in dSecurity.GetAccessRules(true, false, typeof(System.Security.Principal.SecurityIdentifier)))
                     {
-                        string testNewFile = Path.Combine(testSecDir, "tamper.tmp");
-                        File.WriteAllBytes(testNewFile, new byte[] { 9, 9, 9 });
-                        unprivilegedWriteBlocked = false;
+                        var sid = rule.IdentityReference as System.Security.Principal.SecurityIdentifier;
+                        if (sid != sidAdmins && sid != sidSystem)
+                        {
+                            if ((rule.FileSystemRights & dangerousRights) != 0)
+                            {
+                                dirUsersHasWrite = true;
+                                break;
+                            }
+                        }
                     }
-                    catch (UnauthorizedAccessException)
+
+                    bool daclReadSecured = fileInheritanceProtected && !unauthorizedPrincipalFoundOnFile;
+                    bool daclWriteSecured = !dirUsersHasWrite;
+
+                    bool isElevated = SecurityAclHelper.IsRunningElevated();
+                    bool unprivilegedReadBlocked = daclReadSecured;
+                    bool unprivilegedWriteBlocked = daclWriteSecured;
+
+                    if (!isElevated)
                     {
-                        unprivilegedWriteBlocked = true;
-                    }
-                    catch (Exception)
-                    {
-                        unprivilegedWriteBlocked = true;
+                        // In non-elevated user context, also exercise kernel rejection directly
+                        bool osReadBlocked = false;
+                        try
+                        {
+                            byte[] probe = File.ReadAllBytes(testAuthFile);
+                            osReadBlocked = false;
+                        }
+                        catch (UnauthorizedAccessException)
+                        {
+                            osReadBlocked = true;
+                        }
+                        catch (Exception)
+                        {
+                            osReadBlocked = true;
+                        }
+
+                        bool osWriteBlocked = false;
+                        try
+                        {
+                            string testNewFile = Path.Combine(testSecDir, "tamper.tmp");
+                            File.WriteAllBytes(testNewFile, new byte[] { 9, 9, 9 });
+                            osWriteBlocked = false;
+                        }
+                        catch (UnauthorizedAccessException)
+                        {
+                            osWriteBlocked = true;
+                        }
+                        catch (Exception)
+                        {
+                            osWriteBlocked = true;
+                        }
+
+                        unprivilegedReadBlocked = unprivilegedReadBlocked && osReadBlocked;
+                        unprivilegedWriteBlocked = unprivilegedWriteBlocked && osWriteBlocked;
                     }
 
                     bool pass35K = aclApplied && inheritanceProtected && usersNonInheriting && unprivilegedReadBlocked && unprivilegedWriteBlocked;

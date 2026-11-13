@@ -208,9 +208,9 @@ All production binaries are clean-room compiled (`/optimize+ /debug-`) without l
 
 | File Name | Target Type | Size (Bytes) | Official SHA-256 Checksum |
 | :--- | :--- | :--- | :--- |
-| **`USB-Shield-Pro-v2.1.1-Setup.exe`** | Native Installer | `1,311,744` | `BFD2C7C21D19834733D33CFF524B01C1BF1BDA57D526345D71BF75F03A747601` |
-| **`USB-Shield-Pro-v2.1.1-Portable.zip`** | Portable Archive | `403,139` | `65E942EF04C47C0F4DDE5CAB245FBA0F4CC9C47478EC1DD96A1D443942B33FC4` |
-| **`UsbShieldPro.exe`** | Standalone Executable | `1,107,968` | `68ED07B1112F761D0C5B6F2D7815B9BA083F33B8FE33DA30724726C3350B9431` |
+| **`USB-Shield-Pro-v2.1.1-Setup.exe`** | Native Installer | `1,312,256` | `F0F47E5C3ECA7CA72549FE4890D8A095D2E07299072F5C1C6345AA3FBBBFA795` |
+| **`USB-Shield-Pro-v2.1.1-Portable.zip`** | Portable Archive | `400,432` | `C1B9854AD498AC2CD1414C03C597527ABAE7A447DC0167737F23163A43AB2732` |
+| **`UsbShieldPro.exe`** | Standalone Executable | `1,107,968` | `781A0F63E5529691E0D94D8663DC7E081C37D7B28383674DF6C99E74097E6C87` |
 | **`UsbShieldPro.exe.config`** | High-DPI Manifest | `598` | `53840DABDB7510AC21965024AEC4797025C920C965D29BBAA46FFA324338C5B1` |
 | **`README.txt`** | Release Notes | `7,007` | `21E5B2F4E286BCC1E49B4F7529DA4ACDD352A21628F368501B8CD9F17021B6E3` |
 
