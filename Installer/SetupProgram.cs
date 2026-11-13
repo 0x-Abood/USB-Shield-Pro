@@ -22,22 +22,22 @@ using System.Windows.Forms;
 using Microsoft.Win32;
 
 [assembly: AssemblyTitle("USB Shield Pro Setup")]
-[assembly: AssemblyDescription("USB Shield Pro v2.1.0 Installer & Uninstaller")]
+[assembly: AssemblyDescription("USB Shield Pro v2.1.1 Installer & Uninstaller")]
 [assembly: AssemblyCompany("0xAbood")]
 [assembly: AssemblyProduct("USB Shield Pro")]
 [assembly: AssemblyCopyright("Copyright © 2026 0xAbood (https://github.com/0x-Abood/USB-Shield-Pro)")]
-[assembly: AssemblyVersion("2.1.0.0")]
-[assembly: AssemblyFileVersion("2.1.0.0")]
+[assembly: AssemblyVersion("2.1.1.0")]
+[assembly: AssemblyFileVersion("2.1.1.0")]
 
 namespace UsbShieldPro.Installer
 {
     internal static class Program
     {
-        public const string EXPECTED_EXE_SHA256 = "4F9A904E9AB5236C18D298DD78443D5021DB5781BFCF16C0C037100DFEC5AFA9";
-        public const long EXPECTED_EXE_LENGTH = 1060864L;
+        public static string EXPECTED_EXE_SHA256 { get { return PayloadManifest.ExpectedExeSha256; } }
+        public static long EXPECTED_EXE_LENGTH { get { return PayloadManifest.ExpectedExeLength; } }
 
         public const string APP_NAME = "USB Shield Pro";
-        public const string APP_VERSION = "2.1.0";
+        public const string APP_VERSION = "2.1.1";
         public const string SERVICE_NAME = "UsbShieldService";
 
         [DllImport("kernel32.dll", SetLastError = true)]
@@ -227,40 +227,165 @@ namespace UsbShieldPro.Installer
                     if (sc.Status != ServiceControllerStatus.Stopped)
                     {
                         sc.Stop();
-                        sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(3));
+                        sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(7));
                     }
                 }
             }
             catch { }
         }
 
-        public static bool PerformInstall(bool createDesktopShortcut, bool launchAfter, Action<int, string> progress, out string error)
+        public class InstallDiagnosticReport
         {
-            error = null;
+            public bool Success { get; set; }
+            public string FailedPhase { get; set; }
+            public int PhaseNumber { get; set; }
+            public string ExceptionType { get; set; }
+            public int HResult { get; set; }
+            public int Win32ErrorCode { get; set; }
+            public string Message { get; set; }
+            public string StackTrace { get; set; }
+            public string TargetDirectory { get; set; }
+
+            public string FormatReport(bool isArabic)
+            {
+                StringBuilder sb = new StringBuilder();
+                sb.AppendLine("================================================================================");
+                sb.AppendLine("USB SHIELD PRO INSTALLATION DIAGNOSTIC REPORT");
+                sb.AppendLine("================================================================================");
+                sb.AppendFormat("Timestamp:     {0:yyyy-MM-dd HH:mm:ss} UTC\n", DateTime.UtcNow);
+                sb.AppendFormat("OS Version:    {0} ({1})\n", Environment.OSVersion, Environment.Is64BitOperatingSystem ? "64-bit" : "32-bit");
+                sb.AppendFormat("Target Path:   {0}\n", TargetDirectory ?? "Unknown");
+                sb.AppendFormat("Failed Phase:  {0} (Phase {1}/6)\n", FailedPhase ?? "Unknown", PhaseNumber);
+                sb.AppendFormat("Exception:     {0}\n", ExceptionType ?? "Unknown");
+                sb.AppendFormat("HRESULT:       0x{0:X8}\n", HResult);
+                if (Win32ErrorCode != 0)
+                {
+                    sb.AppendFormat("Win32 Error:   {0} (0x{0:X8})\n", Win32ErrorCode);
+                }
+                sb.AppendFormat("Error Message: {0}\n", Message ?? "None");
+                if (!string.IsNullOrEmpty(StackTrace))
+                {
+                    sb.AppendLine("--------------------------------------------------------------------------------");
+                    sb.AppendLine("Stack Trace:");
+                    sb.AppendLine(StackTrace);
+                }
+                sb.AppendLine("================================================================================");
+                return sb.ToString();
+            }
+        }
+
+        public static void PersistDiagnosticReport(InstallDiagnosticReport report)
+        {
+            if (report == null) return;
             try
             {
-                string targetDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), APP_NAME);
+                string logPath = Path.Combine(Path.GetTempPath(), "UsbShieldPro_Setup.log");
+                File.WriteAllText(logPath, report.FormatReport(false), Encoding.UTF8);
+            }
+            catch { }
+        }
 
+        public static bool PerformInstall(bool createDesktopShortcut, bool launchAfter, Action<int, string> progress, out string error)
+        {
+            InstallDiagnosticReport rep;
+            bool ok = PerformInstall(createDesktopShortcut, launchAfter, progress, out rep);
+            error = ok ? null : (rep != null ? rep.Message : "Installation failed.");
+            return ok;
+        }
+
+        private static void MoveFileWithRetry(string source, string destination, int maxRetries = 3)
+        {
+            for (int i = 0; i <= maxRetries; i++)
+            {
+                try
+                {
+                    File.Move(source, destination);
+                    return;
+                }
+                catch (IOException)
+                {
+                    if (i == maxRetries) throw;
+                    Thread.Sleep(500);
+                }
+            }
+        }
+
+        public static bool PerformInstall(bool createDesktopShortcut, bool launchAfter, Action<int, string> progress, out InstallDiagnosticReport report)
+        {
+            report = new InstallDiagnosticReport { Success = false };
+            string targetDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), APP_NAME);
+            report.TargetDirectory = targetDir;
+
+            string currentPhase = "Initializing";
+            int phaseNumber = 0;
+
+            string destExe = Path.Combine(targetDir, "UsbShieldPro.exe");
+            string stageExe = Path.Combine(targetDir, "UsbShieldPro.exe.stage");
+            string backupExe = Path.Combine(targetDir, "UsbShieldPro.exe.bak");
+
+            string destConfig = Path.Combine(targetDir, "UsbShieldPro.exe.config");
+            string stageConfig = Path.Combine(targetDir, "UsbShieldPro.exe.config.stage");
+            string backupConfig = Path.Combine(targetDir, "UsbShieldPro.exe.config.bak");
+
+            string destReadme = Path.Combine(targetDir, "README.txt");
+            string stageReadme = Path.Combine(targetDir, "README.txt.stage");
+            string backupReadme = Path.Combine(targetDir, "README.txt.bak");
+
+            bool wasUpgrade = File.Exists(destExe);
+            bool wasServiceRunning = false;
+            bool exeSwapped = false;
+            bool configSwapped = false;
+            bool readmeSwapped = false;
+
+            try
+            {
                 // Step 1: Stopping existing processes
-                progress(15, "Stopping running USB Shield Pro instances...");
+                phaseNumber = 1;
+                currentPhase = "Stopping running USB Shield Pro instances";
+                progress(15, currentPhase + "...");
+
+                try
+                {
+                    using (var sc = new ServiceController(SERVICE_NAME))
+                    {
+                        if (sc.Status == ServiceControllerStatus.Running || sc.Status == ServiceControllerStatus.StartPending)
+                        {
+                            wasServiceRunning = true;
+                        }
+                    }
+                }
+                catch { }
+
                 StopRunningProcesses();
                 Thread.Sleep(500);
 
                 // Step 2: Ensure Target Directory Exists
-                progress(30, "Creating installation directory...");
+                phaseNumber = 2;
+                currentPhase = "Creating installation directory";
+                progress(30, currentPhase + "...");
                 if (!Directory.Exists(targetDir))
                 {
                     Directory.CreateDirectory(targetDir);
                 }
 
-                // Step 3: Extract & Verify UsbShieldPro.exe
-                progress(50, "Extracting and verifying core executable...");
-                string destExe = Path.Combine(targetDir, "UsbShieldPro.exe");
+                // Clean up any stale staging files
+                try { if (File.Exists(stageExe)) File.Delete(stageExe); } catch { }
+                try { if (File.Exists(stageConfig)) File.Delete(stageConfig); } catch { }
+                try { if (File.Exists(stageReadme)) File.Delete(stageReadme); } catch { }
+
+                // Step 3: Extract & Verify Stage UsbShieldPro.exe
+                phaseNumber = 3;
+                currentPhase = "Extracting and verifying core executable";
+                progress(50, currentPhase + "...");
+
                 using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("UsbShieldPro.exe"))
                 {
                     if (stream == null)
                     {
-                        error = "Embedded resource UsbShieldPro.exe not found.";
+                        report.FailedPhase = currentPhase;
+                        report.PhaseNumber = phaseNumber;
+                        report.Message = "Embedded resource UsbShieldPro.exe not found in installer manifest.";
+                        PersistDiagnosticReport(report);
                         return false;
                     }
                     byte[] data = new byte[stream.Length];
@@ -274,27 +399,75 @@ namespace UsbShieldPro.Installer
 
                     if (data.Length != EXPECTED_EXE_LENGTH)
                     {
-                        error = string.Format("Embedded binary size mismatch (Expected: {0}, Found: {1})", EXPECTED_EXE_LENGTH, data.Length);
+                        report.FailedPhase = currentPhase;
+                        report.PhaseNumber = phaseNumber;
+                        report.Message = string.Format("Embedded binary size mismatch (Expected: {0}, Found: {1})", EXPECTED_EXE_LENGTH, data.Length);
+                        PersistDiagnosticReport(report);
                         return false;
                     }
 
                     string hash = ComputeSha256(data);
                     if (!string.Equals(hash, EXPECTED_EXE_SHA256, StringComparison.OrdinalIgnoreCase))
                     {
-                        error = string.Format("Embedded binary checksum failed!\nExpected: {0}\nFound: {1}", EXPECTED_EXE_SHA256, hash);
+                        report.FailedPhase = currentPhase;
+                        report.PhaseNumber = phaseNumber;
+                        report.Message = string.Format("Embedded binary checksum failed!\nExpected: {0}\nFound: {1}", EXPECTED_EXE_SHA256, hash);
+                        PersistDiagnosticReport(report);
                         return false;
                     }
 
-                    File.WriteAllBytes(destExe, data);
+                    // Write to validated stage file first
+                    using (var fs = new FileStream(stageExe, FileMode.Create, FileAccess.Write, FileShare.None))
+                    {
+                        fs.Write(data, 0, data.Length);
+                        fs.Flush(true);
+                    }
+
+                    // Verify staged disk file length
+                    FileInfo stageFi = new FileInfo(stageExe);
+                    if (stageFi.Length != EXPECTED_EXE_LENGTH)
+                    {
+                        throw new IOException(string.Format("Staged executable disk length mismatch ({0} != {1})", stageFi.Length, EXPECTED_EXE_LENGTH));
+                    }
                 }
 
-                // Step 4: Extract Config & Readme
-                progress(65, "Extracting application configuration and documentation...");
-                string destConfig = Path.Combine(targetDir, "UsbShieldPro.exe.config");
-                ExtractResourceToFile("UsbShieldPro.exe.config", destConfig);
+                // Step 4: Extract Config & Readme to Stage Files
+                phaseNumber = 4;
+                currentPhase = "Extracting application configuration and documentation";
+                progress(65, currentPhase + "...");
+                ExtractResourceToFile("UsbShieldPro.exe.config", stageConfig);
+                ExtractResourceToFile("README.txt", stageReadme);
 
-                string destReadme = Path.Combine(targetDir, "README.txt");
-                ExtractResourceToFile("README.txt", destReadme);
+                // Perform Atomic/Reversible Swaps
+                if (File.Exists(destExe))
+                {
+                    try { if (File.Exists(backupExe)) File.Delete(backupExe); } catch { }
+                    MoveFileWithRetry(destExe, backupExe);
+                }
+                File.Move(stageExe, destExe);
+                exeSwapped = true;
+
+                if (File.Exists(stageConfig))
+                {
+                    if (File.Exists(destConfig))
+                    {
+                        try { if (File.Exists(backupConfig)) File.Delete(backupConfig); } catch { }
+                        MoveFileWithRetry(destConfig, backupConfig);
+                    }
+                    File.Move(stageConfig, destConfig);
+                    configSwapped = true;
+                }
+
+                if (File.Exists(stageReadme))
+                {
+                    if (File.Exists(destReadme))
+                    {
+                        try { if (File.Exists(backupReadme)) File.Delete(backupReadme); } catch { }
+                        MoveFileWithRetry(destReadme, backupReadme);
+                    }
+                    File.Move(stageReadme, destReadme);
+                    readmeSwapped = true;
+                }
 
                 // Copy Uninstaller
                 string destUninstaller = Path.Combine(targetDir, "Uninstall.exe");
@@ -305,7 +478,9 @@ namespace UsbShieldPro.Installer
                 catch { }
 
                 // Step 5: Create Shortcuts
-                progress(80, "Creating application shortcuts...");
+                phaseNumber = 5;
+                currentPhase = "Creating application shortcuts";
+                progress(80, currentPhase + "...");
                 string startMenuDir = Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms);
                 if (Directory.Exists(startMenuDir))
                 {
@@ -324,8 +499,29 @@ namespace UsbShieldPro.Installer
                 }
 
                 // Step 6: Register in Windows Add/Remove Programs
-                progress(90, "Registering application with Windows...");
+                phaseNumber = 6;
+                currentPhase = "Registering application with Windows";
+                progress(90, currentPhase + "...");
                 RegisterUninstallEntry(targetDir, destExe, destUninstaller);
+
+                // Restart service if it was running before upgrade
+                if (wasServiceRunning)
+                {
+                    try
+                    {
+                        using (var sc = new ServiceController(SERVICE_NAME))
+                        {
+                            sc.Start();
+                            sc.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(5));
+                        }
+                    }
+                    catch { }
+                }
+
+                // Commit: Clean up backups
+                try { if (File.Exists(backupExe)) File.Delete(backupExe); } catch { }
+                try { if (File.Exists(backupConfig)) File.Delete(backupConfig); } catch { }
+                try { if (File.Exists(backupReadme)) File.Delete(backupReadme); } catch { }
 
                 progress(100, "Installation complete!");
 
@@ -338,11 +534,61 @@ namespace UsbShieldPro.Installer
                     catch { }
                 }
 
+                report.Success = true;
                 return true;
             }
             catch (Exception ex)
             {
-                error = ex.Message;
+                // ── ROLLBACK ON FAILURE ──
+                try
+                {
+                    try { if (File.Exists(stageExe)) File.Delete(stageExe); } catch { }
+                    try { if (File.Exists(stageConfig)) File.Delete(stageConfig); } catch { }
+                    try { if (File.Exists(stageReadme)) File.Delete(stageReadme); } catch { }
+
+                    if (exeSwapped && File.Exists(backupExe))
+                    {
+                        try { if (File.Exists(destExe)) File.Delete(destExe); } catch { }
+                        try { File.Move(backupExe, destExe); } catch { }
+                    }
+                    if (configSwapped && File.Exists(backupConfig))
+                    {
+                        try { if (File.Exists(destConfig)) File.Delete(destConfig); } catch { }
+                        try { File.Move(backupConfig, destConfig); } catch { }
+                    }
+                    if (readmeSwapped && File.Exists(backupReadme))
+                    {
+                        try { if (File.Exists(destReadme)) File.Delete(destReadme); } catch { }
+                        try { File.Move(backupReadme, destReadme); } catch { }
+                    }
+
+                    if (wasServiceRunning && File.Exists(destExe))
+                    {
+                        try
+                        {
+                            using (var sc = new ServiceController(SERVICE_NAME))
+                            {
+                                sc.Start();
+                            }
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+
+                report.Success = false;
+                report.FailedPhase = currentPhase;
+                report.PhaseNumber = phaseNumber;
+                report.ExceptionType = ex.GetType().FullName;
+                report.HResult = ex.HResult;
+                Win32Exception w32 = ex as Win32Exception;
+                if (w32 != null)
+                {
+                    report.Win32ErrorCode = w32.NativeErrorCode;
+                }
+                report.Message = ex.Message;
+                report.StackTrace = ex.StackTrace;
+                PersistDiagnosticReport(report);
                 return false;
             }
         }
@@ -397,7 +643,7 @@ namespace UsbShieldPro.Installer
                     if (appKey != null)
                     {
                         appKey.SetValue("DisplayName", "USB Shield Pro", RegistryValueKind.String);
-                        appKey.SetValue("DisplayVersion", "2.1.0.0", RegistryValueKind.String);
+                        appKey.SetValue("DisplayVersion", "2.1.1.0", RegistryValueKind.String);
                         appKey.SetValue("Publisher", "0xAbood", RegistryValueKind.String);
                         appKey.SetValue("URLInfoAbout", "https://github.com/0x-Abood/USB-Shield-Pro", RegistryValueKind.String);
                         appKey.SetValue("HelpLink", "https://github.com/0x-Abood/USB-Shield-Pro", RegistryValueKind.String);
@@ -418,19 +664,58 @@ namespace UsbShieldPro.Installer
         {
             bool isAr = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.Equals("ar", StringComparison.OrdinalIgnoreCase);
 
-            if (!silent)
+            // Locate main application binary for authenticated privileged uninstallation
+            string targetDir = Path.GetDirectoryName(Application.ExecutablePath);
+            string exePath = Path.Combine(targetDir, "UsbShieldPro.exe");
+            if (!File.Exists(exePath))
             {
-                string title = isAr ? "إلغاء تثبيت USB Shield Pro" : "Uninstall USB Shield Pro";
-                string prompt = isAr
-                    ? "هل أنت متأكد من رغبتك في إلغاء تثبيت USB Shield Pro وجميع مكوناته من هذا الكمبيوتر؟"
-                    : "Are you sure you want to completely uninstall USB Shield Pro and all its components from this computer?";
-
-                DialogResult dr = MessageBox.Show(prompt, title, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-                if (dr != DialogResult.Yes) return;
+                targetDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), APP_NAME);
+                exePath = Path.Combine(targetDir, "UsbShieldPro.exe");
             }
 
-            // 1. Stop processes
-            StopRunningProcesses();
+            if (File.Exists(exePath))
+            {
+                // Delegate to authenticated UsbShieldPro.exe --uninstall
+                ProcessStartInfo psi = new ProcessStartInfo
+                {
+                    FileName = exePath,
+                    Arguments = silent ? "--uninstall --silent" : "--uninstall",
+                    UseShellExecute = true
+                };
+                try
+                {
+                    Process proc = Process.Start(psi);
+                    if (proc != null)
+                    {
+                        proc.WaitForExit();
+                        if (proc.ExitCode != 0)
+                        {
+                            // Uninstallation was aborted, cancelled, or failed auth!
+                            return; // Do NOT delete anything!
+                        }
+                    }
+                }
+                catch
+                {
+                    return;
+                }
+            }
+            else
+            {
+                if (!silent)
+                {
+                    string title = isAr ? "إلغاء تثبيت USB Shield Pro" : "Uninstall USB Shield Pro";
+                    string prompt = isAr
+                        ? "هل أنت متأكد من رغبتك في إلغاء تثبيت USB Shield Pro وجميع مكوناته من هذا الكمبيوتر؟"
+                        : "Are you sure you want to completely uninstall USB Shield Pro and all its components from this computer?";
+
+                    DialogResult dr = MessageBox.Show(prompt, title, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    if (dr != DialogResult.Yes) return;
+                }
+
+                // 1. Stop processes
+                StopRunningProcesses();
+            }
 
             // 2. Stop & Delete Background Service via native Win32 advapi32 APIs
             try
@@ -440,7 +725,7 @@ namespace UsbShieldPro.Installer
                     if (sc.Status != ServiceControllerStatus.Stopped)
                     {
                         sc.Stop();
-                        sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(3));
+                        sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(7));
                     }
                 }
             }
@@ -505,7 +790,7 @@ namespace UsbShieldPro.Installer
             // 5. Spawn Delayed Self-Deleting Cleanup for C:\Program Files\USB Shield Pro
             try
             {
-                string targetDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), APP_NAME);
+                targetDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), APP_NAME);
                 ProcessStartInfo psi = new ProcessStartInfo
                 {
                     FileName = "cmd.exe",
@@ -563,6 +848,12 @@ namespace UsbShieldPro.Installer
         private Label _lblStatus;
         private ProgressBar _progressBar;
 
+        private Panel _pnlErrorDetails;
+        private TextBox _txtErrorDetails;
+        private Button _btnCopyError;
+        private Label _lblErrorLogPath;
+        private Program.InstallDiagnosticReport _lastReport;
+
         private Panel _pnlFooter;
         private Button _btnInstall;
         private Button _btnCancel;
@@ -586,7 +877,7 @@ namespace UsbShieldPro.Installer
             this.MaximizeBox = false;
             this.MinimizeBox = true;
             this.StartPosition = FormStartPosition.CenterScreen;
-            this.ClientSize = new Size(540, 440);
+            this.ClientSize = new Size(560, 450);
             this.BackColor = ColorBg;
             this.ForeColor = ColorTextWhite;
             this.Font = new Font("Segoe UI", 9.25f, FontStyle.Regular);
@@ -840,16 +1131,70 @@ namespace UsbShieldPro.Installer
             {
                 Font = new Font("Segoe UI", 8.5f, FontStyle.Regular),
                 ForeColor = ColorTextSlate,
-                AutoSize = true,
+                AutoSize = false,
                 BackColor = Color.Transparent
             };
 
             _progressBar = new ProgressBar
             {
-                Height = 10,
+                Height = 12,
                 Style = ProgressBarStyle.Continuous,
                 Value = 0
             };
+
+            // Error Details Panel (Collapsible / Expandable on failure)
+            _pnlErrorDetails = new Panel
+            {
+                Visible = false,
+                BackColor = Color.Transparent
+            };
+
+            _txtErrorDetails = new TextBox
+            {
+                Multiline = true,
+                ReadOnly = true,
+                ScrollBars = ScrollBars.Vertical,
+                BackColor = Color.FromArgb(12, 17, 26),
+                ForeColor = Color.FromArgb(248, 113, 113),
+                Font = new Font("Consolas", 8.25f, FontStyle.Regular),
+                BorderStyle = BorderStyle.FixedSingle,
+                WordWrap = false
+            };
+
+            _btnCopyError = new Button
+            {
+                Size = new Size(140, 26),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(30, 41, 59),
+                ForeColor = Color.FromArgb(203, 213, 225),
+                Font = new Font("Segoe UI", 8.25f, FontStyle.Regular),
+                Cursor = Cursors.Hand
+            };
+            _btnCopyError.FlatAppearance.BorderColor = ColorBorder;
+            _btnCopyError.Click += (s, e) =>
+            {
+                if (!string.IsNullOrEmpty(_txtErrorDetails.Text))
+                {
+                    try
+                    {
+                        Clipboard.SetText(_txtErrorDetails.Text);
+                        _btnCopyError.Text = _isArabic ? "تم النسخ!" : "Copied!";
+                    }
+                    catch { }
+                }
+            };
+
+            _lblErrorLogPath = new Label
+            {
+                Font = new Font("Segoe UI", 7.75f, FontStyle.Regular),
+                ForeColor = ColorTextMuted,
+                AutoSize = true,
+                BackColor = Color.Transparent
+            };
+
+            _pnlErrorDetails.Controls.Add(_txtErrorDetails);
+            _pnlErrorDetails.Controls.Add(_btnCopyError);
+            _pnlErrorDetails.Controls.Add(_lblErrorLogPath);
 
             _pnlContent.Controls.Add(_cardBanner);
             _pnlContent.Controls.Add(_cardDest);
@@ -857,6 +1202,7 @@ namespace UsbShieldPro.Installer
             _pnlContent.Controls.Add(_chkLaunch);
             _pnlContent.Controls.Add(_lblStatus);
             _pnlContent.Controls.Add(_progressBar);
+            _pnlContent.Controls.Add(_pnlErrorDetails);
             _pnlContent.Resize += (s, e) => LayoutContent();
 
             this.Controls.Add(_pnlContent);
@@ -927,6 +1273,15 @@ namespace UsbShieldPro.Installer
                 _lblStatus.Text = _isArabic ? "جاهز لبدء التثبيت." : "Ready to install.";
             }
 
+            if (_btnCopyError != null)
+            {
+                _btnCopyError.Text = _isArabic ? "نسخ تفاصيل الخطأ" : "Copy Error Details";
+            }
+            if (_lblErrorLogPath != null)
+            {
+                _lblErrorLogPath.Text = _isArabic ? "سجل التشخيص: %TEMP%\\UsbShieldPro_Setup.log" : "Log: %TEMP%\\UsbShieldPro_Setup.log";
+            }
+
             LayoutHeader();
             LayoutContent();
             LayoutFooter();
@@ -984,35 +1339,36 @@ namespace UsbShieldPro.Installer
 
             _cardBanner.Location = new Point(pad, 14);
             _cardBanner.Width = cardW;
+            _cardBanner.Height = 72;
 
-            if (_isArabic)
-            {
-                _lblBannerTitle.Location = new Point(_cardBanner.Width - 14 - _lblBannerTitle.Width, 11);
-                _lblBannerSub.Location = new Point(_cardBanner.Width - 14 - _lblBannerSub.Width, 34);
-            }
-            else
-            {
-                _lblBannerTitle.Location = new Point(14, 11);
-                _lblBannerSub.Location = new Point(14, 34);
-            }
+            _lblBannerTitle.Location = new Point(14, 10);
+            _lblBannerTitle.Size = new Size(_cardBanner.Width - 28, 24);
+            _lblBannerTitle.TextAlign = _isArabic ? ContentAlignment.MiddleRight : ContentAlignment.MiddleLeft;
+
+            _lblBannerSub.Location = new Point(14, 38);
+            _lblBannerSub.Size = new Size(_cardBanner.Width - 28, 24);
+            _lblBannerSub.TextAlign = _isArabic ? ContentAlignment.MiddleRight : ContentAlignment.MiddleLeft;
 
             _cardDest.Location = new Point(pad, _cardBanner.Bottom + 12);
             _cardDest.Width = cardW;
+            _cardDest.Height = 76;
 
-            if (_isArabic)
-            {
-                _lblDestTitle.Location = new Point(_cardDest.Width - 14 - _lblDestTitle.Width, 10);
-                _lblDestPath.Location = new Point(_cardDest.Width - 14 - _lblDestPath.Width, 27);
-                _lblSpace.Location = new Point(14, 46);
-            }
-            else
-            {
-                _lblDestTitle.Location = new Point(14, 10);
-                _lblDestPath.Location = new Point(14, 27);
-                _lblSpace.Location = new Point(14, 46);
-            }
+            _lblDestTitle.Location = new Point(14, 10);
+            _lblDestTitle.Size = new Size(_cardDest.Width - 28, 18);
+            _lblDestTitle.TextAlign = _isArabic ? ContentAlignment.MiddleRight : ContentAlignment.MiddleLeft;
+
+            _lblDestPath.Location = new Point(14, 30);
+            _lblDestPath.Size = new Size(_cardDest.Width - 28, 20);
+            _lblDestPath.TextAlign = _isArabic ? ContentAlignment.MiddleRight : ContentAlignment.MiddleLeft;
+
+            _lblSpace.Location = new Point(14, 52);
+            _lblSpace.Size = new Size(_cardDest.Width - 28, 18);
+            _lblSpace.TextAlign = _isArabic ? ContentAlignment.MiddleRight : ContentAlignment.MiddleLeft;
 
             int chkY = _cardDest.Bottom + 14;
+            _chkDesktop.RightToLeft = _isArabic ? RightToLeft.Yes : RightToLeft.No;
+            _chkLaunch.RightToLeft = _isArabic ? RightToLeft.Yes : RightToLeft.No;
+
             if (_isArabic)
             {
                 _chkDesktop.Location = new Point(pad + cardW - _chkDesktop.Width, chkY);
@@ -1025,17 +1381,33 @@ namespace UsbShieldPro.Installer
             }
 
             int statY = _chkLaunch.Bottom + 14;
-            if (_isArabic)
-            {
-                _lblStatus.Location = new Point(pad + cardW - _lblStatus.Width, statY);
-            }
-            else
-            {
-                _lblStatus.Location = new Point(pad + 4, statY);
-            }
+            _lblStatus.Location = new Point(pad, statY);
+            _lblStatus.Size = new Size(cardW, 22);
+            _lblStatus.TextAlign = _isArabic ? ContentAlignment.MiddleRight : ContentAlignment.MiddleLeft;
 
             _progressBar.Location = new Point(pad, _lblStatus.Bottom + 6);
             _progressBar.Width = cardW;
+            _progressBar.Height = 12;
+
+            if (_pnlErrorDetails != null && _pnlErrorDetails.Visible)
+            {
+                _pnlErrorDetails.Location = new Point(pad, _progressBar.Bottom + 10);
+                _pnlErrorDetails.Size = new Size(cardW, 145);
+
+                _txtErrorDetails.Location = new Point(0, 0);
+                _txtErrorDetails.Size = new Size(cardW, 110);
+
+                if (_isArabic)
+                {
+                    _btnCopyError.Location = new Point(cardW - _btnCopyError.Width, 116);
+                    _lblErrorLogPath.Location = new Point(0, 121);
+                }
+                else
+                {
+                    _btnCopyError.Location = new Point(0, 116);
+                    _lblErrorLogPath.Location = new Point(_btnCopyError.Right + 12, 121);
+                }
+            }
         }
 
         private void OnInstallClicked(object sender, EventArgs e)
@@ -1054,7 +1426,7 @@ namespace UsbShieldPro.Installer
 
             Thread worker = new Thread(() =>
             {
-                string error;
+                Program.InstallDiagnosticReport report;
                 bool ok = Program.PerformInstall(
                     desktop,
                     launch,
@@ -1071,7 +1443,7 @@ namespace UsbShieldPro.Installer
                         }
                         catch { }
                     },
-                    out error);
+                    out report);
 
                 this.BeginInvoke(new Action(() =>
                 {
@@ -1080,6 +1452,8 @@ namespace UsbShieldPro.Installer
 
                     if (ok)
                     {
+                        if (_pnlErrorDetails != null) _pnlErrorDetails.Visible = false;
+                        this.ClientSize = new Size(560, 450);
                         _progressBar.Value = 100;
                         _lblStatus.ForeColor = ColorGreen;
                         _lblStatus.Text = _isArabic ? "تم التثبيت بنجاح!" : "Installation completed successfully!";
@@ -1090,8 +1464,20 @@ namespace UsbShieldPro.Installer
                     }
                     else
                     {
+                        _lastReport = report;
+                        if (_pnlErrorDetails != null)
+                        {
+                            _pnlErrorDetails.Visible = true;
+                            _txtErrorDetails.Text = report != null ? report.FormatReport(_isArabic) : "Unknown error during installation.";
+                            _lblErrorLogPath.Text = _isArabic ? "سجل التشخيص: %TEMP%\\UsbShieldPro_Setup.log" : "Log: %TEMP%\\UsbShieldPro_Setup.log";
+                        }
+                        this.ClientSize = new Size(560, 605);
                         _lblStatus.ForeColor = Color.FromArgb(239, 68, 68);
-                        _lblStatus.Text = _isArabic ? ("فشل التثبيت: " + error) : ("Installation failed: " + error);
+                        string phaseDesc = report != null && !string.IsNullOrEmpty(report.FailedPhase) ? report.FailedPhase : "Setup";
+                        _lblStatus.Text = _isArabic
+                            ? string.Format("فشل التثبيت (المرحلة {0}: {1})", report != null ? report.PhaseNumber : 0, TranslateStatusToAr(phaseDesc))
+                            : string.Format("Installation failed at Phase {0} ({1})", report != null ? report.PhaseNumber : 0, phaseDesc);
+
                         _btnInstall.Enabled = true;
                         _btnCancel.Enabled = true;
                     }

@@ -481,7 +481,9 @@ namespace UsbShieldPro.Persistence
                     Path.Combine(dir, "journal.json"),
                     Path.Combine(dir, "journal.bak"),
                     Path.Combine(dir, ".auth"),
+                    Path.Combine(dir, ".auth.bak"),
                     Path.Combine(dir, ".recovery"),
+                    Path.Combine(dir, ".recovery.bak"),
                     Path.Combine(dir, "temp_access.json")
                 };
 

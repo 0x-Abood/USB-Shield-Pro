@@ -14,6 +14,7 @@ using System.ServiceProcess;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
+using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
 using UsbShieldPro.Core;
 using UsbShieldPro.Devices;
@@ -263,6 +264,13 @@ namespace UsbShieldPro
                 bool ok = ServiceManager.UninstallService(out err);
                 Console.WriteLine(ok ? "Service uninstalled successfully." : ("Failed: " + err));
                 return ok ? 0 : 1;
+            }
+
+            // ─── 4b. CLI Mode: Authenticated Secure Uninstaller ───────────────
+            if (args != null && Array.Exists(args, a => string.Equals(a, "--uninstall", StringComparison.OrdinalIgnoreCase)))
+            {
+                LogStartup("SECURE-UNINSTALL MODE SELECTED");
+                return RunSecureUninstaller(args);
             }
 
 #if !PRODUCTION
@@ -1165,6 +1173,203 @@ namespace UsbShieldPro
                 CloseHandle(h);
                 return "ALLOWED (Security Warning)";
             }
+        }
+
+        public static Func<bool> SecureUninstallerAuthOverride = null;
+        public static Action<bool> SecureUninstallerRollbackOverride = null;
+
+        public static int RunSecureUninstaller(string[] args)
+        {
+            bool silent = args != null && Array.Exists(args, a =>
+                string.Equals(a, "--silent", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(a, "-s", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(a, "/silent", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(a, "/s", StringComparison.OrdinalIgnoreCase));
+            bool purgeData = args != null && Array.Exists(args, a => string.Equals(a, "--purge-data", StringComparison.OrdinalIgnoreCase));
+
+            // 1. Privileged Boundary Check
+            if (!IsRunningAsAdmin())
+            {
+                try
+                {
+                    ProcessStartInfo psi = new ProcessStartInfo
+                    {
+                        FileName = Application.ExecutablePath,
+                        Arguments = (args != null && args.Length > 0) ? string.Join(" ", args) : "--uninstall",
+                        Verb = "runas",
+                        UseShellExecute = true
+                    };
+                    Process elevated = Process.Start(psi);
+                    if (elevated != null)
+                    {
+                        elevated.WaitForExit();
+                        return elevated.ExitCode;
+                    }
+                    return 1;
+                }
+                catch
+                {
+                    if (!silent)
+                    {
+                        MessageBox.Show(Loc.Get("AdminRequired"), Loc.Get("AppTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                    return 1;
+                }
+            }
+
+            // Apply user language preference from settings
+            try
+            {
+                AppSettingsData settings = SettingsRepository.Load();
+                if (settings != null && !string.IsNullOrEmpty(settings.LanguagePreference))
+                {
+                    Loc.Current = settings.LanguagePreference.Equals("en", StringComparison.OrdinalIgnoreCase)
+                        ? Language.English
+                        : Language.Arabic;
+                }
+            }
+            catch { }
+
+            bool isAr = (Loc.Current == Language.Arabic);
+
+            // 2. Authentication Gate: Require Admin Password or Master Recovery Key if configured
+            if (SecureUninstallerAuthOverride != null)
+            {
+                if (!SecureUninstallerAuthOverride()) return 2;
+            }
+            else if (PasswordManager.IsPasswordConfigured())
+            {
+                string title = isAr ? "إلغاء تثبيت USB Shield Pro" : "Uninstall USB Shield Pro";
+                string authPrompt = isAr
+                    ? "أدخل كلمة مرور المسؤول أو مفتاح الاسترداد الرئيسي للمصادقة على إلغاء التثبيت"
+                    : "Enter administrator password or Master Recovery Key to authorize uninstallation";
+
+                using (PasswordDialog dlg = new PasswordDialog(title, authPrompt, true))
+                {
+                    if (dlg.ShowDialog() != DialogResult.OK)
+                    {
+                        return 2; // User cancelled or failed authentication
+                    }
+                }
+            }
+
+            // 3. User Confirmation Prompt
+            if (!silent)
+            {
+                string confirmTitle = isAr ? "تأكيد إلغاء التثبيت" : "Confirm Uninstallation";
+                string confirmMsg = isAr
+                    ? "هل أنت متأكد من رغبتك في إلغاء تثبيت USB Shield Pro؟\n\nسيتم استعادة سياسات وسائط التخزين في ويندوز إلى حالتها الأصلية."
+                    : "Are you sure you want to uninstall USB Shield Pro?\n\nOriginal Windows storage policies will be restored to their baseline state.";
+
+                DialogResult dr = MessageBox.Show(confirmMsg, confirmTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (dr != DialogResult.Yes)
+                {
+                    return 3; // Cancelled by user
+                }
+
+                // Data retention preference prompt
+                string retainTitle = isAr ? "بيانات النشاط والإعدادات" : "Activity Data & Settings";
+                string retainMsg = isAr
+                    ? "هل ترغب في الاحتفاظ بسجل النشاط وإعدادات الأمان للاستخدام في المستقبل؟\n\nاضغط «نعم» للاحتفاظ بها، أو «لا» لحذف كافة السجلات والإعدادات."
+                    : "Do you want to keep your activity history and security settings for future installation?\n\nClick 'Yes' to preserve data, or 'No' to completely remove all logs and configuration.";
+
+                DialogResult drRetain = MessageBox.Show(retainMsg, retainTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (drRetain == DialogResult.No)
+                {
+                    purgeData = true;
+                }
+            }
+
+            // 4. Exact Policy Rollback via Write-Ahead Journal / Baseline
+            if (SecureUninstallerRollbackOverride != null)
+            {
+                SecureUninstallerRollbackOverride(purgeData);
+            }
+            else
+            {
+                List<string> rollbackErrors;
+                bool rollbackOk = RecoveryManager.RestorePreShieldState(out rollbackErrors);
+                if (!rollbackOk)
+                {
+                    // Fallback: clear known policy lockdown keys to ensure system storage is accessible
+                    try
+                    {
+                        using (var hklm = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64))
+                        using (var key = hklm.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\StorageDevicePolicies", true))
+                        {
+                            if (key != null) key.SetValue("WriteProtect", 0, RegistryValueKind.DWord);
+                        }
+                    }
+                    catch { }
+                }
+
+                // 5. Stop and Uninstall Service via Win32 Service Control Manager
+                string svcErr;
+                ServiceManager.UninstallService(out svcErr);
+
+                // 6. Terminate other running GUI instances
+                try
+                {
+                    int currentPid = Process.GetCurrentProcess().Id;
+                    foreach (Process p in Process.GetProcessesByName("UsbShieldPro"))
+                    {
+                        try
+                        {
+                            if (p.Id != currentPid)
+                            {
+                                p.Kill();
+                                p.WaitForExit(3000);
+                            }
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+
+                // 7. Remove Shortcuts
+                try
+                {
+                    string startMenuLnk = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms), "USB Shield Pro.lnk");
+                    if (File.Exists(startMenuLnk)) File.Delete(startMenuLnk);
+
+                    string desktopLnk = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory), "USB Shield Pro.lnk");
+                    if (File.Exists(desktopLnk)) File.Delete(desktopLnk);
+
+                    string userDesktopLnk = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "USB Shield Pro.lnk");
+                    if (File.Exists(userDesktopLnk)) File.Delete(userDesktopLnk);
+                }
+                catch { }
+
+                // 8. Remove Windows ARP Registry Key
+                try
+                {
+                    using (RegistryKey baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64))
+                    using (RegistryKey parent = baseKey.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", true))
+                    {
+                        if (parent != null)
+                        {
+                            parent.DeleteSubKeyTree("USBShieldPro", false);
+                        }
+                    }
+                }
+                catch { }
+
+                // 9. Purge Data Directory if requested
+                if (purgeData)
+                {
+                    try
+                    {
+                        string progData = SecurityAclHelper.GetProgramDataDirectory();
+                        if (Directory.Exists(progData))
+                        {
+                            Directory.Delete(progData, true);
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            return 0; // Successfully uninstalled
         }
 
         static bool IsRunningAsAdmin()

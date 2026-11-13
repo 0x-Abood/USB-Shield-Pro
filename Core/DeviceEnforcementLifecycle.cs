@@ -56,6 +56,11 @@ namespace UsbShieldPro.Core
         public long LastUpdatedTicks { get; set; }
 
         public CancellationTokenSource ActiveCts { get; set; }
+
+        public string FriendlyName { get; set; }
+        public bool ArrivalLogged { get; set; }
+        public bool DetectionLogged { get; set; }
+        public EnforcementState PriorStateBeforeRemoval { get; set; }
     }
 
     /// <summary>
@@ -614,6 +619,91 @@ namespace UsbShieldPro.Core
         }
 
         /// <summary>
+        /// Registers or updates device presence in the lifecycle repository.
+        /// Detects genuine physical device arrivals across insertions (Generation tracking).
+        /// </summary>
+        public static bool RegisterDevicePresence(DeviceIdentity dev, out DeviceLifecycleRecord record, out bool isNewArrival)
+        {
+            record = null;
+            isNewArrival = false;
+            if (dev == null) return false;
+            if (dev.WpdClassification == WpdKind.StorageVolumeProxy ||
+                dev.WpdClassification == WpdKind.StorageVolumeProxyUnresolved)
+            {
+                return false;
+            }
+
+            string key = BuildPhysicalKey(dev);
+            lock (_syncLock)
+            {
+                DeviceLifecycleRecord rec;
+                if (_activeLifecycles.TryGetValue(key, out rec))
+                {
+                    if (rec.State == EnforcementState.Removed)
+                    {
+                        // Genuine new arrival generation after confirmed physical removal
+                        rec.GenerationId++;
+                        rec.EnforcementCycleId = 1;
+                        rec.State = EnforcementState.New;
+                        rec.AttemptCount = 0;
+                        rec.NotificationEmitted = false;
+                        rec.ArrivalLogged = false;
+                        rec.DetectionLogged = false;
+                        rec.HadUsableMediaBeforeAttempt = (dev.VolumeMountings != null && dev.VolumeMountings.Count > 0) || dev.TotalSizeBytes > 0;
+                        rec.FirstObservedTicks = Stopwatch.GetTimestamp();
+                        rec.LastUpdatedTicks = rec.FirstObservedTicks;
+                        rec.FriendlyName = dev.FriendlyName ?? rec.FriendlyName;
+                        rec.StorageDeviceInstanceId = dev.DeviceInstanceId ?? rec.StorageDeviceInstanceId;
+                        rec.PhysicalUsbParentInstanceId = dev.PhysicalUsbParentInstanceId ?? rec.PhysicalUsbParentInstanceId;
+                        rec.ImmediateParentInstanceId = dev.ImmediateParentInstanceId ?? rec.ImmediateParentInstanceId;
+                        rec.PhysicalParentInstanceId = (!string.IsNullOrEmpty(dev.PhysicalUsbParentInstanceId) && dev.PhysicalUsbParentInstanceId != "UNKNOWN")
+                            ? dev.PhysicalUsbParentInstanceId
+                            : (dev.ParentDeviceInstanceId ?? rec.PhysicalParentInstanceId);
+                        rec.DiskNumber = dev.PhysicalDiskNumber;
+                        record = rec;
+                        isNewArrival = true;
+                        return true;
+                    }
+
+                    if (!string.IsNullOrEmpty(dev.FriendlyName)) rec.FriendlyName = dev.FriendlyName;
+                    record = rec;
+                    isNewArrival = false;
+                    return true;
+                }
+
+                // Brand new physical device lifecycle
+                rec = new DeviceLifecycleRecord
+                {
+                    PhysicalKey = key,
+                    PhysicalUsbParentInstanceId = dev.PhysicalUsbParentInstanceId,
+                    ImmediateParentInstanceId = dev.ImmediateParentInstanceId,
+                    PhysicalParentInstanceId = (!string.IsNullOrEmpty(dev.PhysicalUsbParentInstanceId) && dev.PhysicalUsbParentInstanceId != "UNKNOWN")
+                        ? dev.PhysicalUsbParentInstanceId
+                        : dev.ParentDeviceInstanceId,
+                    StorageDeviceInstanceId = dev.DeviceInstanceId,
+                    SerialNumber = dev.SerialNumber,
+                    DiskNumber = dev.PhysicalDiskNumber,
+                    HadUsableMediaBeforeAttempt = (dev.VolumeMountings != null && dev.VolumeMountings.Count > 0) || dev.TotalSizeBytes > 0,
+                    GenerationId = 1,
+                    EnforcementCycleId = 1,
+                    State = EnforcementState.New,
+                    AttemptCount = 0,
+                    NotificationEmitted = false,
+                    ArrivalLogged = false,
+                    DetectionLogged = false,
+                    FriendlyName = dev.FriendlyName,
+                    FirstObservedTicks = Stopwatch.GetTimestamp(),
+                    LastUpdatedTicks = Stopwatch.GetTimestamp()
+                };
+
+                _activeLifecycles[key] = rec;
+                record = rec;
+                isNewArrival = true;
+                return true;
+            }
+        }
+
+        /// <summary>
         /// Attempts to acquire the enforcement execution lease for a physical device.
         /// Guarantees that only ONE worker owns the active lifecycle.
         /// OS presence query is performed OUTSIDE _syncLock.
@@ -681,6 +771,7 @@ namespace UsbShieldPro.Core
                         rec.State = EnforcementState.Evaluating;
                         rec.AttemptCount = 0;
                         rec.NotificationEmitted = false;
+                        rec.DetectionLogged = false;
                         rec.HadUsableMediaBeforeAttempt = hasUsableMedia;
                         rec.FirstObservedTicks = Stopwatch.GetTimestamp();
                         rec.LastUpdatedTicks = rec.FirstObservedTicks;
@@ -708,6 +799,16 @@ namespace UsbShieldPro.Core
                         return true;
                     }
 
+                    if (rec.State == EnforcementState.New)
+                    {
+                        rec.State = EnforcementState.Evaluating;
+                        rec.AttemptCount = 0;
+                        rec.NotificationEmitted = false;
+                        rec.HadUsableMediaBeforeAttempt = hasUsableMedia;
+                        record = rec;
+                        return true;
+                    }
+
                     // Already active (including Evaluating or EjectPending), ejected, or failed terminally while present: deny lease
                     return false;
                 }
@@ -730,6 +831,7 @@ namespace UsbShieldPro.Core
                     State = EnforcementState.Evaluating,
                     AttemptCount = 0,
                     NotificationEmitted = false,
+                    DetectionLogged = false,
                     FirstObservedTicks = Stopwatch.GetTimestamp(),
                     LastUpdatedTicks = Stopwatch.GetTimestamp()
                 };
@@ -755,6 +857,8 @@ namespace UsbShieldPro.Core
                     rec.State = EnforcementState.AllowedTrusted;
                     rec.NotificationEmitted = false;
                     rec.AttemptCount = 0;
+                    rec.FriendlyName = dev.FriendlyName ?? rec.FriendlyName;
+                    rec.ArrivalLogged = true;
                     rec.LastUpdatedTicks = Stopwatch.GetTimestamp();
                 }
                 else
@@ -924,6 +1028,7 @@ namespace UsbShieldPro.Core
                     if (rec.GenerationId == generationId)
                     {
                         rec.State = EnforcementState.Removed;
+                        rec.DetectionLogged = false;
                         rec.LastUpdatedTicks = Stopwatch.GetTimestamp();
                         ctsToCancel = rec.ActiveCts;
                     }
@@ -987,12 +1092,16 @@ namespace UsbShieldPro.Core
             public string Anchor;
             public int GenerationId;
             public int EnforcementCycleId;
+            public EnforcementState PriorState;
+            public string FriendlyName;
+            public string StorageId;
         }
 
         /// <summary>
         /// Reconciles physically removed devices.
         /// ONLY clears lifecycle when physical parent anchor is confirmed absent from PnP.
         /// OS presence checks are executed OUTSIDE _syncLock.
+        /// Emits bounded removal events to ActivityRepository when confirmed absent.
         /// </summary>
         public static void ReconcileRemovedDevices(List<DeviceIdentity> currentlyAttached = null)
         {
@@ -1012,17 +1121,43 @@ namespace UsbShieldPro.Core
                                 ? rec.PhysicalUsbParentInstanceId
                                 : (rec.PhysicalParentInstanceId ?? rec.StorageDeviceInstanceId),
                             GenerationId = rec.GenerationId,
-                            EnforcementCycleId = rec.EnforcementCycleId
+                            EnforcementCycleId = rec.EnforcementCycleId,
+                            PriorState = rec.State,
+                            FriendlyName = rec.FriendlyName,
+                            StorageId = rec.StorageDeviceInstanceId
                         });
                     }
                 }
             }
 
             // Step 2: Query presence OUTSIDE lock
+            HashSet<string> attachedKeys = null;
+            if (currentlyAttached != null)
+            {
+                attachedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var d in currentlyAttached)
+                {
+                    if (d != null)
+                    {
+                        string k = BuildPhysicalKey(d);
+                        if (!string.IsNullOrEmpty(k)) attachedKeys.Add(k);
+                    }
+                }
+            }
+
             List<ReconcileItem> toMarkRemoved = new List<ReconcileItem>();
             foreach (var item in items)
             {
-                bool isPresent = CheckPhysicalPresence(item.Anchor, null);
+                bool isPresent;
+                if (attachedKeys != null && attachedKeys.Contains(item.Key))
+                {
+                    isPresent = true;
+                }
+                else
+                {
+                    isPresent = CheckPhysicalPresence(item.Anchor, null);
+                }
+
                 if (!isPresent)
                 {
                     toMarkRemoved.Add(item);
@@ -1041,7 +1176,9 @@ namespace UsbShieldPro.Core
                         {
                             if (rec.GenerationId == item.GenerationId && rec.EnforcementCycleId == item.EnforcementCycleId)
                             {
+                                rec.PriorStateBeforeRemoval = rec.State;
                                 rec.State = EnforcementState.Removed;
+                                rec.DetectionLogged = false;
                                 if (rec.ActiveCts != null)
                                 {
                                     try { rec.ActiveCts.Cancel(); } catch { }
@@ -1049,6 +1186,49 @@ namespace UsbShieldPro.Core
                             }
                         }
                     }
+                }
+
+                // Step 4: Emit removal events to ActivityRepository OUTSIDE lock
+                foreach (var item in toMarkRemoved)
+                {
+                    try
+                    {
+                        string name = !string.IsNullOrEmpty(item.FriendlyName) ? item.FriendlyName : "USB Storage Device";
+                        string title;
+                        string badge;
+                        if (item.PriorState == EnforcementState.EjectedUntilRemoval)
+                        {
+                            title = string.Format(Loc.Get("EventDeviceUnpluggedEjected"), name);
+                            badge = Loc.Get("BadgeRemoved");
+                        }
+                        else if (item.PriorState == EnforcementState.FailedTerminal)
+                        {
+                            title = string.Format(Loc.Get("EventDeviceDisconnected"), name);
+                            badge = Loc.Get("BadgeRemoved");
+                        }
+                        else
+                        {
+                            title = string.Format(Loc.Get("EventDeviceDisconnected"), name);
+                            badge = Loc.Get("BadgeDisconnected");
+                        }
+
+                        string eventCode = (item.PriorState == EnforcementState.EjectedUntilRemoval) ? "DEVICE_UNPLUGGED_EJECTED" : "DEVICE_DISCONNECTED";
+                        string badgeKey = (item.PriorState == EnforcementState.EjectedUntilRemoval || item.PriorState == EnforcementState.FailedTerminal) ? "BadgeRemoved" : "BadgeDisconnected";
+
+                        ActivityRepository.AppendRecord(new ActivityRecord(
+                            DateTime.UtcNow,
+                            eventCode,
+                            name,
+                            item.StorageId ?? item.Key,
+                            "",
+                            ActivityCategory.DeviceEvents,
+                            badgeKey,
+                            Theme.TextMuted,
+                            "",
+                            title,
+                            item.StorageId ?? item.Key));
+                    }
+                    catch { }
                 }
             }
         }

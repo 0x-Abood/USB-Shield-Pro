@@ -147,15 +147,24 @@ namespace UsbShieldPro.Security
                         fs.Flush(true);
                     }
 
+                    if (string.IsNullOrEmpty(SecurityAclHelper.BaseDirectoryOverride))
+                    {
+                        SecurityAclHelper.ApplySensitiveFileSecurity(temp);
+                    }
+
                     // 2. Atomic replacement with backup preservation
                     if (File.Exists(path))
                     {
                         try { File.SetAttributes(path, FileAttributes.Normal); } catch { }
                         try { if (File.Exists(bak)) File.SetAttributes(bak, FileAttributes.Normal); } catch { }
 
+                        string oldFile = path + ".old";
+                        try { if (File.Exists(oldFile)) File.Delete(oldFile); } catch { }
+
                         try
                         {
-                            File.Replace(temp, path, bak, true);
+                            File.Replace(temp, path, oldFile, true);
+                            try { if (File.Exists(oldFile)) File.Delete(oldFile); } catch { }
                         }
                         catch
                         {
@@ -192,6 +201,19 @@ namespace UsbShieldPro.Security
                         error = "Password verifier file could not be verified on disk.";
                         return false;
                     }
+
+                    // 5. Synchronize backup verifier so it mirrors the new rotated password
+                    try
+                    {
+                        if (File.Exists(bak)) { File.SetAttributes(bak, FileAttributes.Normal); }
+                        File.Copy(path, bak, true);
+                        try { File.SetAttributes(bak, FileAttributes.Hidden); } catch { }
+                        if (string.IsNullOrEmpty(SecurityAclHelper.BaseDirectoryOverride))
+                        {
+                            SecurityAclHelper.ApplySensitiveFileSecurity(bak);
+                        }
+                    }
+                    catch { }
 
                     return true;
                 }
@@ -290,6 +312,40 @@ namespace UsbShieldPro.Security
             }
         }
 
+        public static bool IsVerifierFileIntact(string path)
+        {
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return false;
+            try
+            {
+                byte[] encrypted = File.ReadAllBytes(path);
+                if (encrypted == null || encrypted.Length == 0) return false;
+
+                byte[] decrypted = ProtectedData.Unprotect(encrypted, null, DataProtectionScope.LocalMachine);
+                if (decrypted == null || decrypted.Length == 0) return false;
+
+                string record = Encoding.UTF8.GetString(decrypted);
+                Array.Clear(decrypted, 0, decrypted.Length);
+
+                string[] parts = record.Split('$');
+                if (parts.Length < 5) return false;
+                if (parts[0] != "V2") return false;
+                if (parts[1] != "PBKDF2-SHA256") return false;
+
+                int iter;
+                if (!int.TryParse(parts[2], out iter) || iter < 1000) return false;
+
+                byte[] salt = Convert.FromBase64String(parts[3]);
+                byte[] hash = Convert.FromBase64String(parts[4]);
+                if (salt == null || salt.Length < 16 || hash == null || hash.Length < 16) return false;
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         public static bool VerifyPassword(string inputPassword)
         {
             if (string.IsNullOrEmpty(inputPassword)) return false;
@@ -299,18 +355,36 @@ namespace UsbShieldPro.Security
                 string path = GetAuthFilePath();
                 string bak = GetAuthBackupFilePath();
 
-                // 1. Try primary authentication verifier
-                if (VerifyPasswordAgainstFile(path, inputPassword))
+                // 1. If primary verifier is intact, evaluate against primary ONLY.
+                // Strict Security Invariant: An intact primary must NEVER fall back to backup
+                // on authentication failure, because backup could hold a pre-rotation credential.
+                if (IsVerifierFileIntact(path))
                 {
-                    return true;
+                    bool valid = VerifyPasswordAgainstFile(path, inputPassword);
+                    if (valid && !IsVerifierFileIntact(bak))
+                    {
+                        try
+                        {
+                            if (File.Exists(bak)) { File.SetAttributes(bak, FileAttributes.Normal); }
+                            File.Copy(path, bak, true);
+                            try { File.SetAttributes(bak, FileAttributes.Hidden); } catch { }
+                            if (string.IsNullOrEmpty(SecurityAclHelper.BaseDirectoryOverride))
+                            {
+                                SecurityAclHelper.ApplySensitiveFileSecurity(bak);
+                            }
+                        }
+                        catch { }
+                    }
+                    return valid;
                 }
 
-                // 2. If primary failed or was corrupted/missing, try backup verifier
-                if (File.Exists(bak) && VerifyPasswordAgainstFile(bak, inputPassword))
+                // 2. Primary is missing, empty, or corrupted. Fall back to backup verifier only if backup is intact.
+                if (IsVerifierFileIntact(bak) && VerifyPasswordAgainstFile(bak, inputPassword))
                 {
                     // Cleanly heal primary from verified backup
                     try
                     {
+                        if (File.Exists(path)) { File.SetAttributes(path, FileAttributes.Normal); }
                         File.Copy(bak, path, true);
                         try { File.SetAttributes(path, FileAttributes.Hidden); } catch { }
                         if (string.IsNullOrEmpty(SecurityAclHelper.BaseDirectoryOverride))

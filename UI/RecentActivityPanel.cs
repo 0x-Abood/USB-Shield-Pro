@@ -258,19 +258,23 @@ namespace UsbShieldPro.UI
                 int dotSize = DpiManager.ScaleInt(8);
                 int dotY = rowY + (rowH - dotSize) / 2;
 
-                string timeText = r.Timestamp.ToString("HH:mm:ss");
+                string timeText = r.LocalTimestamp.ToString("HH:mm:ss");
                 Size timeSize = TextRenderer.MeasureText(g, timeText, timeFont);
                 int timeW = Math.Max(timeSize.Width, DpiManager.ScaleInt(54));
 
+                string bBadge = r.GetLocalizedBadge();
+                string bCtx = r.GetLocalizedContext();
                 string desc;
-                if (!string.IsNullOrEmpty(r.Context) && !string.IsNullOrEmpty(r.ResultBadge))
+                if (!string.IsNullOrEmpty(bCtx) && !string.IsNullOrEmpty(bBadge))
                 {
-                    desc = r.Context + " • " + r.ResultBadge;
+                    desc = bCtx + " \u2022 " + bBadge;
                 }
                 else
                 {
-                    desc = !string.IsNullOrEmpty(r.Context) ? r.Context : (r.ResultBadge ?? "");
+                    desc = !string.IsNullOrEmpty(bCtx) ? bCtx : (bBadge ?? "");
                 }
+
+                string locTitle = r.GetLocalizedTitle();
 
                 if (isRtl)
                 {
@@ -292,7 +296,7 @@ namespace UsbShieldPro.UI
                     int blockH = rowTitleFont.Height + rowSubFont.Height + DpiManager.ScaleInt(2);
                     int tY = rowY + Math.Max(DpiManager.ScaleInt(2), (rowH - blockH) / 2);
                     Rectangle tr = new Rectangle(textLeft, tY, textW, rowTitleFont.Height + DpiManager.ScaleInt(4));
-                    TextRenderer.DrawText(g, r.Title ?? "", rowTitleFont, tr, pal.TextPrimary,
+                    TextRenderer.DrawText(g, locTitle ?? "", rowTitleFont, tr, pal.TextPrimary,
                         TextFormatFlags.SingleLine | TextFormatFlags.Top | TextFormatFlags.Right | TextFormatFlags.RightToLeft | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
 
                     int sY = tY + rowTitleFont.Height + DpiManager.ScaleInt(2);
@@ -321,7 +325,7 @@ namespace UsbShieldPro.UI
                     int blockH = rowTitleFont.Height + rowSubFont.Height + DpiManager.ScaleInt(2);
                     int tY = rowY + Math.Max(DpiManager.ScaleInt(2), (rowH - blockH) / 2);
                     Rectangle tr = new Rectangle(textLeft, tY, textW, rowTitleFont.Height + DpiManager.ScaleInt(4));
-                    TextRenderer.DrawText(g, r.Title ?? "", rowTitleFont, tr, pal.TextPrimary,
+                    TextRenderer.DrawText(g, locTitle ?? "", rowTitleFont, tr, pal.TextPrimary,
                         TextFormatFlags.SingleLine | TextFormatFlags.Top | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
 
                     int sY = tY + rowTitleFont.Height + DpiManager.ScaleInt(2);

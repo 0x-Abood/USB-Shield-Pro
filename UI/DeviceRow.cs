@@ -47,9 +47,10 @@ namespace UsbShieldPro.UI
             {
                 if (_device == null) return false;
                 return _device.IsSystemDisk ||
-                       _device.SafetyResult == SafetyValidationResult.RejectedSystemOrBootDisk ||
+                       _device.SafetyResult != SafetyValidationResult.Passed ||
                        _device.Category == DeviceCategory.InternalFixedDisk ||
-                       _device.Category == DeviceCategory.CriticalSystemHardware;
+                       _device.Category == DeviceCategory.CriticalSystemHardware ||
+                       (_device.PhysicalTransport != PhysicalBusType.Usb && _device.WindowsClass != StorageClass.WindowsPortableDevice);
             }
         }
 

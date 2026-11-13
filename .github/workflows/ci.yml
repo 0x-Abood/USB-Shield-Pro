@@ -9,7 +9,7 @@ on:
 
 jobs:
   build-and-verify:
-    name: Build Binaries & Run 353 Assertions
+    name: Build Binaries & Run 391 Assertions
     runs-on: windows-latest
 
     steps:
@@ -52,7 +52,7 @@ jobs:
         shell: cmd
         run: Installer\build_installer.bat
 
-      - name: Execute Full Regression Test Suite (28 Suites / 353 Assertions)
+      - name: Execute Full Regression Test Suite (32 Suites / 391 Assertions)
         shell: powershell
         run: |
           .\TestRunner.exe --test-harness
@@ -63,4 +63,4 @@ jobs:
       - name: Compute and Display Build Hashes
         shell: powershell
         run: |
-          Get-FileHash UsbShieldPro.exe, TestRunner.exe, release\USB-Shield-Pro-v2.1.0-Setup.exe -Algorithm SHA256 | Format-Table -AutoSize
+          Get-FileHash UsbShieldPro.exe, TestRunner.exe, staging\USB-Shield-Pro-v2.1.1-Candidate\USB-Shield-Pro-v2.1.1-Setup.exe -Algorithm SHA256 | Format-Table -AutoSize

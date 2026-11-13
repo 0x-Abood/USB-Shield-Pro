@@ -137,7 +137,7 @@ namespace UsbShieldPro.UI
             // ─── 1. Top Bar ──────────────────────────────────────────────────
             _topBar = new AppTopBar();
             _topBar.BrandTitle = "USB SHIELD PRO";
-            _topBar.VersionText = "v2.1";
+            _topBar.VersionText = "v2.1.1";
             _topBar.PostureBadge.Text = _isArabic ? "محمي" : "PROTECTED";
             _topBar.PostureBadge.Variant = StatusBadgeVariant.Success;
             _topBar.LanguageButton.Text = _isArabic ? "AR" : "EN";

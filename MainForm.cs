@@ -30,6 +30,15 @@ namespace UsbShieldPro
         public static extern bool ReleaseCapture();
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         public static extern int SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool RedrawWindow(IntPtr hWnd, IntPtr lprcUpdate, IntPtr hrgnUpdate, uint flags);
+
+        private const int WM_SETREDRAW = 0x000B;
+        private const uint RDW_INVALIDATE = 0x0001;
+        private const uint RDW_ALLCHILDREN = 0x0080;
+        private const uint RDW_UPDATENOW = 0x0100;
+        private const uint RDW_ERASE = 0x0004;
+        private const uint RDW_FRAME = 0x0400;
 
         [System.Runtime.InteropServices.DllImport("dwmapi.dll", PreserveSig = true)]
         private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
@@ -237,6 +246,7 @@ namespace UsbShieldPro
         private List<ActivityRow> _activeActivityRows = new List<ActivityRow>();
         private ActivityRecord _selectedActivityRecord;
         private List<ActivityRecord> _activityRecords = new List<ActivityRecord>();
+        private DateTime _lastActivitySyncUtc = DateTime.MinValue;
 
         // Isolated test-only properties (zero disk writes, purely in-memory for testing/captures)
         public List<DeviceRule> TestIsolatedWhitelistRules { get; set; }
@@ -433,6 +443,21 @@ namespace UsbShieldPro
             BuildUI();
 
             ThemeManager.ThemeChanged += OnThemeChanged;
+
+            // Load persistent activity records from disk store on startup
+            if (TestIsolatedActivityRecords == null)
+            {
+                try
+                {
+                    _activityRecords = ActivityRepository.Load();
+                    _lastActivitySyncUtc = ActivityRepository.GetLastWriteUtc();
+                    if (_recentActivityPanel != null)
+                    {
+                        _recentActivityPanel.SetRecords(_activityRecords, Loc.IsRtl);
+                    }
+                }
+                catch { }
+            }
 
             if (!IsCaptureMode)
             {
@@ -1173,6 +1198,10 @@ namespace UsbShieldPro
         {
             CleanupPreviousUiControls();
             RightToLeft = Loc.RtlValue;
+            if (IsHandleCreated)
+            {
+                SendMessage(Handle, WM_SETREDRAW, 0, 0);
+            }
             SuspendLayout();
 
             AppSettingsData settings = SettingsRepository.Load();
@@ -1187,7 +1216,7 @@ namespace UsbShieldPro
             // ═══════════════════════════════════════════════════════════════
             _topBar = new AppTopBar();
             _topBar.BrandTitle = "USB SHIELD PRO";
-            _topBar.VersionText = "v2.1";
+            _topBar.VersionText = "v2.1.1";
             _topBar.LanguageButton.Text = isRtl ? "AR" : "EN";
 
             _topBar.CloseClicked += delegate { Close(); };
@@ -2096,8 +2125,11 @@ namespace UsbShieldPro
 
             foreach (var dev in allDevices)
             {
-                if (dev.IsSystemDisk || dev.SafetyResult == SafetyValidationResult.RejectedSystemOrBootDisk ||
-                    dev.Category == DeviceCategory.InternalFixedDisk || dev.Category == DeviceCategory.CriticalSystemHardware)
+                if (dev.IsSystemDisk ||
+                    dev.SafetyResult != SafetyValidationResult.Passed ||
+                    dev.Category == DeviceCategory.InternalFixedDisk ||
+                    dev.Category == DeviceCategory.CriticalSystemHardware ||
+                    (dev.PhysicalTransport != PhysicalBusType.Usb && dev.WindowsClass != StorageClass.WindowsPortableDevice))
                 {
                     systemDevices.Add(dev);
                 }
@@ -2445,7 +2477,8 @@ namespace UsbShieldPro
 
                 foreach (var dev in devices)
                 {
-                    if (dev.IsRemovableMedia || dev.PhysicalTransport == PhysicalBusType.Usb)
+                    if (dev.PhysicalTransport == PhysicalBusType.Usb && dev.WindowsClass == StorageClass.DiskDrive &&
+                        dev.Category != DeviceCategory.InternalFixedDisk && dev.Category != DeviceCategory.CriticalSystemHardware)
                     {
                         string guardReason;
                         if (SystemDeviceSafetyGuard.ValidateDevice(dev, out guardReason) == SafetyValidationResult.Passed)
@@ -3962,11 +3995,25 @@ namespace UsbShieldPro
             {
                 if (MsgBox.Show(this, Loc.Get("ClearActivityConfirmMsg"), Loc.Get("ClearActivityConfirmTitle"), MessageBoxButtons.YesNo) == DialogResult.Yes)
                 {
+                    if (!IsCaptureMode && TestIsolatedActivityRecords == null)
+                    {
+                        try
+                        {
+                            string clearErr;
+                            ActivityRepository.Clear(out clearErr);
+                            _lastActivitySyncUtc = ActivityRepository.GetLastWriteUtc();
+                        }
+                        catch { }
+                    }
                     _activityRecords.Clear();
                     if (TestIsolatedActivityRecords != null) TestIsolatedActivityRecords.Clear();
                     _selectedActivityRecord = null;
                     if (_activityDrawer != null) _activityDrawer.CloseDrawer();
                     RefreshActivityView();
+                    if (_recentActivityPanel != null)
+                    {
+                        _recentActivityPanel.SetRecords(_activityRecords, Loc.IsRtl);
+                    }
                 }
             };
 
@@ -4260,9 +4307,33 @@ namespace UsbShieldPro
             RefreshActivityView();
         }
 
-        private void RefreshActivityView()
+        public void RefreshActivityViewPublic()
+        {
+            RefreshActivityView();
+        }
+
+        public void RefreshActivityView()
         {
             if (_activityScroll == null || _activityScroll.ContentPanel == null) return;
+
+            if (!IsCaptureMode && TestIsolatedActivityRecords == null)
+            {
+                try
+                {
+                    DateTime diskWrite = ActivityRepository.GetLastWriteUtc();
+                    if (diskWrite > _lastActivitySyncUtc)
+                    {
+                        _activityRecords = ActivityRepository.Load();
+                        _lastActivitySyncUtc = diskWrite;
+                        if (_recentActivityPanel != null)
+                        {
+                            _recentActivityPanel.SetRecords(_activityRecords, Loc.IsRtl);
+                        }
+                    }
+                }
+                catch { }
+            }
+
             _activityScroll.ContentPanel.SuspendLayout();
             UiDrawingUtils.ClearAndDisposeControls(_activityScroll.ContentPanel.Controls, _activityEmptyState);
             _activeActivityRows.Clear();
@@ -4332,9 +4403,10 @@ namespace UsbShieldPro
                     if (rec.Category != ActivityCategory.Errors) continue;
                 }
 
-                // Date filter
-                if (minDate.HasValue && rec.Timestamp < minDate.Value) continue;
-                if (maxDate.HasValue && rec.Timestamp > maxDate.Value) continue;
+                // Date filter (evaluated strictly against user local presentation timestamp)
+                DateTime localTs = rec.LocalTimestamp;
+                if (minDate.HasValue && localTs < minDate.Value) continue;
+                if (maxDate.HasValue && localTs > maxDate.Value) continue;
 
                 filtered.Add(rec);
             }
@@ -4362,9 +4434,10 @@ namespace UsbShieldPro
                 DateTime lastDate = DateTime.MinValue;
                 foreach (var rec in filtered)
                 {
-                    if (rec.Timestamp.Date != lastDate)
+                    DateTime recLocal = rec.LocalTimestamp;
+                    if (recLocal.Date != lastDate)
                     {
-                        lastDate = rec.Timestamp.Date;
+                        lastDate = recLocal.Date;
                         string dateHeaderStr;
                         if (lastDate == DateTime.Today)
                             dateHeaderStr = (Loc.IsRtl ? "اليوم — " : "Today — ") + lastDate.ToString("yyyy-MM-dd");
@@ -4543,8 +4616,18 @@ namespace UsbShieldPro
 
         public void LogActivity(string title, ActivityCategory cat, string badge, Color badgeColor, string context = "")
         {
-            ActivityRecord rec = new ActivityRecord(DateTime.Now, title, cat, badge, badgeColor, context);
+            ActivityRecord rec = new ActivityRecord(DateTime.UtcNow, title, cat, badge, badgeColor, context);
             _activityRecords.Insert(0, rec);
+            if (!IsCaptureMode && TestIsolatedActivityRecords == null)
+            {
+                try
+                {
+                    string saveErr;
+                    ActivityRepository.AppendRecord(rec, out saveErr);
+                    _lastActivitySyncUtc = ActivityRepository.GetLastWriteUtc();
+                }
+                catch { }
+            }
             if (_activityScroll != null)
             {
                 if (InvokeRequired)
@@ -4579,28 +4662,37 @@ namespace UsbShieldPro
 
         private void OnDeviceEnforcementPending(object sender, DeviceInterceptEventArgs e)
         {
-            string name = e.Device != null ? e.Device.FriendlyName : "USB Storage";
             string text = Loc.Get("SafeEjectPreparing");
-            string activityText = string.Format("{0}: {1}", name, text);
-            LogActivity(activityText, ActivityCategory.DeviceEvents, Loc.Get("BadgeReactiveAutoEject"), Theme.AccentOrange);
 
             if (_tray != null)
                 _tray.ShowBalloon(Loc.Get("AppTitle"), text);
+
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(RefreshActivityView));
+            }
+            else
+            {
+                RefreshActivityView();
+            }
         }
 
         private void OnDeviceIntercepted(object sender, DeviceInterceptEventArgs e)
         {
-            string name = e.Device != null ? e.Device.FriendlyName : "USB Storage";
             string formatKey = (e != null && e.EjectSuccess) ? "SafeEjectSuccessStatus" : "SafeEjectFailedStatus";
             string text = Loc.Get(formatKey);
 
-            string activityText = FormatActivityLogMessage(string.Format("{0}: {1}", name, text), e != null ? e.Message : null, e != null && e.EjectSuccess);
-            LogActivity(activityText, (e != null && e.EjectSuccess) ? ActivityCategory.DeviceEvents : ActivityCategory.Errors,
-                        (e != null && e.EjectSuccess) ? Loc.Get("BadgeSuccess") : Loc.Get("BadgeFailed"),
-                        (e != null && e.EjectSuccess) ? Theme.AccentGreen : Theme.AccentRed);
-
             if (_tray != null)
                 _tray.ShowBalloon(Loc.Get("AppTitle"), text);
+
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(RefreshActivityView));
+            }
+            else
+            {
+                RefreshActivityView();
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════════
@@ -5828,6 +5920,30 @@ namespace UsbShieldPro
                     }
                 }
             }
+
+            // 3. Activity repository sync (detect records written by Service in Session 0)
+            if (!IsCaptureMode && TestIsolatedActivityRecords == null)
+            {
+                try
+                {
+                    DateTime diskWrite = ActivityRepository.GetLastWriteUtc();
+                    if (diskWrite > _lastActivitySyncUtc)
+                    {
+                        _activityRecords = ActivityRepository.Load();
+                        _lastActivitySyncUtc = diskWrite;
+                        if (_recentActivityPanel != null)
+                        {
+                            List<ActivityRecord> sourceRecords = TestIsolatedActivityRecords != null ? TestIsolatedActivityRecords : _activityRecords;
+                            _recentActivityPanel.SetRecords(sourceRecords, Loc.IsRtl);
+                        }
+                        if (_sidebar != null && _sidebar.SelectedIndex == 4)
+                        {
+                            RefreshActivityView();
+                        }
+                    }
+                }
+                catch { }
+            }
         }
 
         private static int _pnpPendingGeneration = 0;
@@ -5865,7 +5981,7 @@ namespace UsbShieldPro
                 EnforcementOwnerState ownerState = EnforcementOwnerResolver.ResolveOwner();
                 bool canEnforce = EnforcementOwnerResolver.IsGuiEnforcementAllowed();
 
-                if (hasArrival && canEnforce)
+                if (canEnforce)
                 {
                     try
                     {
@@ -5875,7 +5991,6 @@ namespace UsbShieldPro
                         {
                             int remaining = TemporaryAccessManager.PeekRemainingSeconds();
                             var outcome = ActiveSentinel.EvaluateAndEnforceConnectedDevices(s.ActivePolicy, remaining > 0, dispatchSource);
-                            // Note: Blind 4-pass reconciliation polling removed in production in favor of event-driven interface wake
                         }
                     }
                     catch { }
@@ -5884,7 +5999,7 @@ namespace UsbShieldPro
                         EnforcementOwnerResolver.MarkGuiWorkerIdle();
                     }
                 }
-                else if (hasArrival && ownerState == EnforcementOwnerState.Service)
+                else if (ownerState == EnforcementOwnerState.Service)
                 {
                     try
                     {
@@ -5935,6 +6050,29 @@ namespace UsbShieldPro
                                 RefreshDevicesList();
                             }
                             RefreshLiveStatus();
+
+                            // Synchronize activity log immediately following hardware events
+                            if (!IsCaptureMode && TestIsolatedActivityRecords == null)
+                            {
+                                try
+                                {
+                                    DateTime diskWrite = ActivityRepository.GetLastWriteUtc();
+                                    if (diskWrite > _lastActivitySyncUtc)
+                                    {
+                                        _activityRecords = ActivityRepository.Load();
+                                        _lastActivitySyncUtc = diskWrite;
+                                        if (_recentActivityPanel != null)
+                                        {
+                                            _recentActivityPanel.SetRecords(_activityRecords, Loc.IsRtl);
+                                        }
+                                        if (_sidebar != null && _sidebar.SelectedIndex == 4)
+                                        {
+                                            RefreshActivityView();
+                                        }
+                                    }
+                                }
+                                catch { }
+                            }
                         }));
                     }
                     catch { }
@@ -6129,51 +6267,66 @@ namespace UsbShieldPro
 
         private void RebuildUI()
         {
-            int currentTab = (_sidebar != null) ? _sidebar.SelectedIndex : 0;
-            BuildUI();
-            if (_sidebar != null && currentTab < 7)
+            bool handleCreated = IsHandleCreated;
+            if (handleCreated)
             {
-                _sidebar.SelectedIndex = currentTab;
-                SwitchTab(currentTab);
+                SendMessage(Handle, WM_SETREDRAW, 0, 0);
             }
-            RefreshLiveStatus();
-            RefreshDevicesList();
-            RefreshWhitelistView();
-            if (_tray != null) _tray.BuildMenu();
-
-            // Explicitly force full layout and window bounds recalculation
-            PerformLayout();
-            OnResize(EventArgs.Empty);
-
-            if (_contentPanel != null)
+            SuspendLayout();
+            try
             {
-                _contentPanel.Visible = true;
-                if (_contentPanel.Width <= 0 || _contentPanel.Height <= 0)
+                int currentTab = (_sidebar != null) ? _sidebar.SelectedIndex : 0;
+                BuildUI();
+                if (_sidebar != null && currentTab < 7)
                 {
-                    int topBarH = (_topBar != null && _topBar.Visible) ? _topBar.Height : 0;
-                    int sideBarW = (_sidebar != null && _sidebar.Visible) ? _sidebar.Width : 0;
-                    int cpW = Math.Max(100, ClientSize.Width - sideBarW - Padding.Horizontal);
-                    int cpH = Math.Max(100, ClientSize.Height - topBarH - Padding.Vertical);
-                    int cpX = (Loc.IsRtl) ? Padding.Left : (Padding.Left + sideBarW);
-                    int cpY = Padding.Top + topBarH;
-                    _contentPanel.SetBounds(cpX, cpY, cpW, cpH);
+                    _sidebar.SelectedIndex = currentTab;
+                    SwitchTab(currentTab);
                 }
-                _contentPanel.PerformLayout();
-                if (_contentPanel.Controls.Count > 0)
+                RefreshLiveStatus();
+                RefreshDevicesList();
+                RefreshWhitelistView();
+                if (_tray != null) _tray.BuildMenu();
+
+                // Explicitly force full layout and window bounds recalculation
+                PerformLayout();
+                OnResize(EventArgs.Empty);
+
+                if (_contentPanel != null)
                 {
-                    Control activeTab = _contentPanel.Controls[0];
-                    activeTab.Visible = true;
-                    if (activeTab.Width <= 0 || activeTab.Height <= 0)
+                    _contentPanel.Visible = true;
+                    if (_contentPanel.Width <= 0 || _contentPanel.Height <= 0)
                     {
-                        activeTab.SetBounds(0, 0, _contentPanel.ClientSize.Width, _contentPanel.ClientSize.Height);
+                        int topBarH = (_topBar != null && _topBar.Visible) ? _topBar.Height : 0;
+                        int sideBarW = (_sidebar != null && _sidebar.Visible) ? _sidebar.Width : 0;
+                        int cpW = Math.Max(100, ClientSize.Width - sideBarW - Padding.Horizontal);
+                        int cpH = Math.Max(100, ClientSize.Height - topBarH - Padding.Vertical);
+                        int cpX = (Loc.IsRtl) ? Padding.Left : (Padding.Left + sideBarW);
+                        int cpY = Padding.Top + topBarH;
+                        _contentPanel.SetBounds(cpX, cpY, cpW, cpH);
                     }
-                    activeTab.PerformLayout();
-                    activeTab.BringToFront();
+                    _contentPanel.PerformLayout();
+                    if (_contentPanel.Controls.Count > 0)
+                    {
+                        Control activeTab = _contentPanel.Controls[0];
+                        activeTab.Visible = true;
+                        if (activeTab.Width <= 0 || activeTab.Height <= 0)
+                        {
+                            activeTab.SetBounds(0, 0, _contentPanel.ClientSize.Width, _contentPanel.ClientSize.Height);
+                        }
+                        activeTab.PerformLayout();
+                        activeTab.BringToFront();
+                    }
                 }
             }
-
-            Refresh();
-            Invalidate(true);
+            finally
+            {
+                ResumeLayout(true);
+                if (IsHandleCreated)
+                {
+                    SendMessage(Handle, WM_SETREDRAW, 1, 0);
+                    RedrawWindow(Handle, IntPtr.Zero, IntPtr.Zero, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW | RDW_ERASE | RDW_FRAME);
+                }
+            }
         }
 
         public void ShowFromTray()
@@ -6223,14 +6376,25 @@ namespace UsbShieldPro
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            if (!IsCaptureMode && e.CloseReason == CloseReason.UserClosing && SettingsRepository.Load().MinimizeToTray)
+            if (!IsCaptureMode && e.CloseReason == CloseReason.UserClosing)
             {
-                e.Cancel = true;
-                WindowState = FormWindowState.Minimized;
-                Hide();
-                ShowInTaskbar = false;
-                if (_tray != null) _tray.ShowBalloon(Loc.Get("AppTitle"), Loc.Get("MinToTray"));
-                return;
+                if (SettingsRepository.Load().MinimizeToTray)
+                {
+                    e.Cancel = true;
+                    WindowState = FormWindowState.Minimized;
+                    Hide();
+                    ShowInTaskbar = false;
+                    if (_tray != null) _tray.ShowBalloon(Loc.Get("AppTitle"), Loc.Get("MinToTray"));
+                    return;
+                }
+                else
+                {
+                    if (!RequireAuth(Loc.Get("Exit")))
+                    {
+                        e.Cancel = true;
+                        return;
+                    }
+                }
             }
             try { StorageNotificationManager.Unregister(); } catch { }
             if (_registeredTrayWakeup != null)

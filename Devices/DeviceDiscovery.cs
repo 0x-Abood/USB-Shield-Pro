@@ -279,28 +279,35 @@ namespace UsbShieldPro.Devices
                             string iface = (mo["InterfaceType"] as string ?? "").ToUpperInvariant();
                             bool hasVerifiedUsbParent = (!string.IsNullOrEmpty(dev.PhysicalUsbParentInstanceId) &&
                                                         dev.PhysicalUsbParentInstanceId != "UNKNOWN" &&
-                                                        dev.PhysicalUsbParentInstanceId.StartsWith(@"USB", StringComparison.OrdinalIgnoreCase));
-                            bool hasUsbDiskId = (dev.DeviceInstanceId != null && dev.DeviceInstanceId.ToUpperInvariant().Contains("USB"));
+                                                        (dev.PhysicalUsbParentInstanceId.StartsWith(@"USB\", StringComparison.OrdinalIgnoreCase) ||
+                                                         dev.PhysicalUsbParentInstanceId.StartsWith(@"USBSTOR\", StringComparison.OrdinalIgnoreCase) ||
+                                                         dev.PhysicalUsbParentInstanceId.StartsWith(@"UASPSTOR\", StringComparison.OrdinalIgnoreCase)));
+                            bool hasUsbDiskId = (dev.DeviceInstanceId != null &&
+                                                (dev.DeviceInstanceId.StartsWith(@"USBSTOR\", StringComparison.OrdinalIgnoreCase) ||
+                                                 dev.DeviceInstanceId.StartsWith(@"UASPSTOR\", StringComparison.OrdinalIgnoreCase) ||
+                                                 dev.DeviceInstanceId.StartsWith(@"USB\", StringComparison.OrdinalIgnoreCase)));
                             bool hasUsbParentId = (!string.IsNullOrEmpty(dev.ParentDeviceInstanceId) &&
-                                                   dev.ParentDeviceInstanceId.StartsWith(@"USB", StringComparison.OrdinalIgnoreCase));
+                                                   (dev.ParentDeviceInstanceId.StartsWith(@"USB\", StringComparison.OrdinalIgnoreCase) ||
+                                                    dev.ParentDeviceInstanceId.StartsWith(@"USBSTOR\", StringComparison.OrdinalIgnoreCase) ||
+                                                    dev.ParentDeviceInstanceId.StartsWith(@"UASPSTOR\", StringComparison.OrdinalIgnoreCase)));
                             bool hasUsbImmediateParent = (!string.IsNullOrEmpty(dev.ImmediateParentInstanceId) &&
                                                           (dev.ImmediateParentInstanceId.StartsWith(@"USB\", StringComparison.OrdinalIgnoreCase) ||
                                                            dev.ImmediateParentInstanceId.StartsWith(@"USBSTOR\", StringComparison.OrdinalIgnoreCase) ||
                                                            dev.ImmediateParentInstanceId.StartsWith(@"UASPSTOR\", StringComparison.OrdinalIgnoreCase)));
 
-                            if (iface.Contains("USB") || hasVerifiedUsbParent || hasUsbDiskId || hasUsbParentId || hasUsbImmediateParent)
+                            if (iface.Equals("USB", StringComparison.OrdinalIgnoreCase) || hasVerifiedUsbParent || hasUsbDiskId || hasUsbParentId || hasUsbImmediateParent)
                             {
                                 dev.PhysicalTransport = PhysicalBusType.Usb;
                             }
-                            else if (iface.Contains("SCSI"))
+                            else if (iface.Contains("SCSI") || iface.Contains("RAID"))
                             {
-                                // Could be internal NVMe or SCSI
+                                // Could be internal NVMe, RAID, or SATA/AHCI presented as SCSI
                                 if (dev.DeviceInstanceId != null && dev.DeviceInstanceId.ToUpperInvariant().Contains("NVME"))
                                     dev.PhysicalTransport = PhysicalBusType.Nvme;
                                 else
                                     dev.PhysicalTransport = PhysicalBusType.Scsi;
                             }
-                            else if (iface.Contains("IDE") || iface.Contains("ATA"))
+                            else if (iface.Contains("IDE") || iface.Contains("ATA") || iface.Contains("SATA"))
                             {
                                 dev.PhysicalTransport = PhysicalBusType.Sata;
                             }
@@ -608,7 +615,13 @@ namespace UsbShieldPro.Devices
                     dev.WpdClassification = WpdKind.StorageVolumeProxyUnresolved;
                     dev.WindowsClass = StorageClass.WindowsPortableDevice;
                     dev.SetupClassGuid = "{eec5ad98-8080-425f-922a-dab33962f594}";
-                    dev.PhysicalTransport = PhysicalBusType.Usb;
+
+                    bool isUsb = (!string.IsNullOrEmpty(dev.PhysicalUsbParentInstanceId) &&
+                                  dev.PhysicalUsbParentInstanceId != "UNKNOWN" &&
+                                  dev.PhysicalUsbParentInstanceId.StartsWith(@"USB\", StringComparison.OrdinalIgnoreCase)) ||
+                                 (!string.IsNullOrEmpty(dev.DeviceInstanceId) &&
+                                  dev.DeviceInstanceId.StartsWith(@"USB\", StringComparison.OrdinalIgnoreCase));
+                    dev.PhysicalTransport = isUsb ? PhysicalBusType.Usb : PhysicalBusType.Unknown;
                     dev.IsRemovableMedia = true;
 
                     lock (LastUnresolvedStorageProxies)
@@ -630,7 +643,13 @@ namespace UsbShieldPro.Devices
                 dev.WpdClassification = WpdKind.PortableDevice;
                 dev.WindowsClass = StorageClass.WindowsPortableDevice;
                 dev.SetupClassGuid = "{eec5ad98-8080-425f-922a-dab33962f594}";
-                dev.PhysicalTransport = PhysicalBusType.Usb;
+
+                bool isUsb = (!string.IsNullOrEmpty(dev.PhysicalUsbParentInstanceId) &&
+                              dev.PhysicalUsbParentInstanceId != "UNKNOWN" &&
+                              dev.PhysicalUsbParentInstanceId.StartsWith(@"USB\", StringComparison.OrdinalIgnoreCase)) ||
+                             (!string.IsNullOrEmpty(dev.DeviceInstanceId) &&
+                              dev.DeviceInstanceId.StartsWith(@"USB\", StringComparison.OrdinalIgnoreCase));
+                dev.PhysicalTransport = isUsb ? PhysicalBusType.Usb : PhysicalBusType.Unknown;
                 dev.IsRemovableMedia = true;
 
                 list.Add(dev);
@@ -644,7 +663,13 @@ namespace UsbShieldPro.Devices
             dev.WpdClassification = WpdKind.StorageVolumeProxyUnresolved;
             dev.WindowsClass = StorageClass.WindowsPortableDevice;
             dev.SetupClassGuid = "{eec5ad98-8080-425f-922a-dab33962f594}";
-            dev.PhysicalTransport = PhysicalBusType.Usb;
+
+            bool isAmbiguousUsb = (!string.IsNullOrEmpty(dev.PhysicalUsbParentInstanceId) &&
+                                   dev.PhysicalUsbParentInstanceId != "UNKNOWN" &&
+                                   dev.PhysicalUsbParentInstanceId.StartsWith(@"USB\", StringComparison.OrdinalIgnoreCase)) ||
+                                  (!string.IsNullOrEmpty(dev.DeviceInstanceId) &&
+                                   dev.DeviceInstanceId.StartsWith(@"USB\", StringComparison.OrdinalIgnoreCase));
+            dev.PhysicalTransport = isAmbiguousUsb ? PhysicalBusType.Usb : PhysicalBusType.Unknown;
             dev.IsRemovableMedia = true;
 
             lock (LastUnresolvedStorageProxies)
@@ -958,7 +983,41 @@ namespace UsbShieldPro.Devices
 
             try
             {
-                // Query Seek Penalty (SSD vs HDD)
+                // 1. Authoritative Storage Device Descriptor (BusType & RemovableMedia from kernel storage port driver)
+                try
+                {
+                    STORAGE_PROPERTY_QUERY queryBus = new STORAGE_PROPERTY_QUERY();
+                    queryBus.PropertyId = 0; // StorageDeviceProperty
+                    queryBus.QueryType = 0;  // PropertyStandardQuery
+
+                    STORAGE_DEVICE_DESCRIPTOR_HEADER busDesc = new STORAGE_DEVICE_DESCRIPTOR_HEADER();
+                    int bytesRetBus;
+                    bool okBus = DeviceIoControl(hDevice,
+                        IOCTL_STORAGE_QUERY_PROPERTY,
+                        ref queryBus, Marshal.SizeOf(queryBus),
+                        ref busDesc, Marshal.SizeOf(busDesc),
+                        out bytesRetBus, IntPtr.Zero);
+
+                    if (okBus)
+                    {
+                        if (busDesc.BusType == 7) // BusTypeUsb
+                        {
+                            dev.PhysicalTransport = PhysicalBusType.Usb;
+                        }
+                        else if (busDesc.BusType > 0 && busDesc.BusType <= (int)PhysicalBusType.Ufs)
+                        {
+                            dev.PhysicalTransport = (PhysicalBusType)busDesc.BusType;
+                        }
+
+                        if (busDesc.RemovableMedia)
+                        {
+                            dev.IsRemovableMedia = true;
+                        }
+                    }
+                }
+                catch { }
+
+                // 2. Query Seek Penalty (SSD vs HDD)
                 STORAGE_PROPERTY_QUERY query = new STORAGE_PROPERTY_QUERY();
                 query.PropertyId = 7; // StorageDeviceSeekPenaltyProperty
                 query.QueryType = 0;  // PropertyStandardQuery
@@ -1079,11 +1138,43 @@ namespace UsbShieldPro.Devices
                     if (drive.DriveType == DriveType.Removable)
                     {
                         DeviceIdentity dev = new DeviceIdentity();
-                        dev.FriendlyName = string.IsNullOrEmpty(drive.VolumeLabel) ? "Removable USB Drive" : drive.VolumeLabel;
-                        dev.PhysicalTransport = PhysicalBusType.Usb;
+                        dev.FriendlyName = string.IsNullOrEmpty(drive.VolumeLabel) ? "Removable Storage Device" : drive.VolumeLabel;
                         dev.WindowsClass = StorageClass.DiskDrive;
                         dev.IsRemovableMedia = true;
                         dev.VolumeMountings.Add(drive.Name.TrimEnd('\\'));
+
+                        // Verify physical drive number & positive USB bus evidence via IOCTL
+                        int diskNum = -1;
+                        try
+                        {
+                            string volPath = @"\\.\" + drive.Name.TrimEnd('\\');
+                            IntPtr hVol = CreateFile(volPath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, IntPtr.Zero, OPEN_EXISTING, 0, IntPtr.Zero);
+                            if (hVol != IntPtr.Zero && hVol.ToInt64() != -1)
+                            {
+                                try
+                                {
+                                    STORAGE_DEVICE_NUMBER sdn = new STORAGE_DEVICE_NUMBER();
+                                    int bytesRet;
+                                    if (DeviceIoControl(hVol, IOCTL_STORAGE_GET_DEVICE_NUMBER, IntPtr.Zero, 0, ref sdn, Marshal.SizeOf(sdn), out bytesRet, IntPtr.Zero))
+                                    {
+                                        diskNum = sdn.DeviceNumber;
+                                    }
+                                }
+                                finally { CloseHandle(hVol); }
+                            }
+                        }
+                        catch { }
+
+                        dev.PhysicalDiskNumber = diskNum;
+                        if (diskNum >= 0)
+                        {
+                            QueryStorageProperties(dev);
+                        }
+                        else
+                        {
+                            dev.PhysicalTransport = PhysicalBusType.Unknown;
+                        }
+
                         list.Add(dev);
                     }
                 }
@@ -1177,6 +1268,25 @@ namespace UsbShieldPro.Devices
         }
 
         [StructLayout(LayoutKind.Sequential)]
+        private struct STORAGE_DEVICE_DESCRIPTOR_HEADER
+        {
+            public uint Version;
+            public uint Size;
+            public byte DeviceType;
+            public byte DeviceTypeModifier;
+            [MarshalAs(UnmanagedType.I1)]
+            public bool RemovableMedia;
+            [MarshalAs(UnmanagedType.I1)]
+            public bool CommandQueueing;
+            public uint VendorIdOffset;
+            public uint ProductIdOffset;
+            public uint ProductRevisionOffset;
+            public uint SerialNumberOffset;
+            public int BusType;
+            public uint RawPropertiesLength;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
         private struct DEVICE_SEEK_PENALTY_DESCRIPTOR
         {
             public uint Version;
@@ -1202,6 +1312,17 @@ namespace UsbShieldPro.Devices
             uint dwCreationDisposition,
             uint dwFlagsAndAttributes,
             IntPtr hTemplateFile);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool DeviceIoControl(
+            IntPtr hDevice,
+            uint dwIoControlCode,
+            ref STORAGE_PROPERTY_QUERY lpInBuffer,
+            int nInBufferSize,
+            ref STORAGE_DEVICE_DESCRIPTOR_HEADER lpOutBuffer,
+            int nOutBufferSize,
+            out int lpBytesReturned,
+            IntPtr lpOverlapped);
 
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool DeviceIoControl(

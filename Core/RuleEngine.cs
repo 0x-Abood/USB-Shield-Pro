@@ -70,7 +70,7 @@ namespace UsbShieldPro.Core
             {
                 // Invariant: Windows Removable Storage class policies (Deny_All / RemovableDisks Deny_Read|Write)
                 // operate inside the kernel storage stack and override all individual whitelist exceptions.
-                if (currentPolicy != null && (currentPolicy.BlockAllRemovable || (currentPolicy.BlockRemovableDisks && (device.IsRemovableMedia || device.PhysicalTransport == PhysicalBusType.Usb))))
+                if (currentPolicy != null && (currentPolicy.BlockAllRemovable || (currentPolicy.BlockRemovableDisks && device.PhysicalTransport == PhysicalBusType.Usb)))
                 {
                     result.DisplayBadge = "CLASS BLOCKED (TRUST OVERRIDDEN)";
                     result.EvaluationReason = "Device is trusted, but Windows class-wide Removable Storage policy is active and supersedes individual device exceptions.";
@@ -94,7 +94,7 @@ namespace UsbShieldPro.Core
                     result.DisplayBadge = "STRICT PNP INSTALLATION CONTROL";
                     result.EvaluationReason = "Device rejected under Strict PnP Installation Control.";
                     result.RecommendedAction = RuleAction.DenyBlocked;
-                    result.ShouldAutoEject = true;
+                    result.ShouldAutoEject = (device.WindowsClass != StorageClass.WindowsPortableDevice);
                     return result;
                 }
 
@@ -103,7 +103,7 @@ namespace UsbShieldPro.Core
                     result.DisplayBadge = "TRUSTED-ONLY — AUTO-EJECT";
                     result.EvaluationReason = "Unauthorized storage device connected while Normal Trusted-Only Mode is active.";
                     result.RecommendedAction = RuleAction.DenyBlocked;
-                    result.ShouldAutoEject = true;
+                    result.ShouldAutoEject = (device.WindowsClass != StorageClass.WindowsPortableDevice);
                     return result;
                 }
             }
@@ -112,7 +112,7 @@ namespace UsbShieldPro.Core
             if (currentPolicy != null)
             {
                 // Global Deny_All
-                if (currentPolicy.BlockAllRemovable && (device.IsRemovableMedia || device.PhysicalTransport == PhysicalBusType.Usb))
+                if (currentPolicy.BlockAllRemovable && device.PhysicalTransport == PhysicalBusType.Usb)
                 {
                     result.DisplayBadge = "POLICY BLOCK";
                     result.EvaluationReason = "Global Deny_All removable storage policy applies.";
@@ -122,7 +122,7 @@ namespace UsbShieldPro.Core
                 }
 
                 // Removable Disks Policy (Setup Class GUID {53f5630d-b6bf-11d0-94f2-00a0c91efb8b})
-                if (currentPolicy.BlockRemovableDisks && (device.IsRemovableMedia || device.PhysicalTransport == PhysicalBusType.Usb))
+                if (currentPolicy.BlockRemovableDisks && device.PhysicalTransport == PhysicalBusType.Usb)
                 {
                     result.DisplayBadge = "POLICY BLOCK";
                     result.EvaluationReason = "Windows Removable Disks policy applies (reliably enforceable via reactive ejection).";

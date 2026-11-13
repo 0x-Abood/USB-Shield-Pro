@@ -31,7 +31,9 @@ query
 # Scratches, Probes & Audit Staging
 /scratch/
 /audit/
+/staging/
 /.agents/
+/baseline_release_v2.1.0_preserved/
 
 # IDE & Development Metadata
 .vs/

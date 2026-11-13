@@ -458,29 +458,33 @@ namespace UsbShieldPro.UI
 
             bool isRtl = Loc.IsRtl;
 
-            _eventTitleHeaderLabel.Text = _currentRecord.Title ?? "-";
-            _lblEventTitleVal.Text = _currentRecord.Title ?? "-";
-            _lblTimestampVal.Text = _currentRecord.Timestamp.ToString("yyyy-MM-dd HH:mm:ss");
+            string locTitle = _currentRecord.GetLocalizedTitle();
+            string locBadge = _currentRecord.GetLocalizedBadge();
+            string locContext = _currentRecord.GetLocalizedContext();
+
+            _eventTitleHeaderLabel.Text = !string.IsNullOrEmpty(locTitle) ? locTitle : "-";
+            _lblEventTitleVal.Text = !string.IsNullOrEmpty(locTitle) ? locTitle : "-";
+            _lblTimestampVal.Text = _currentRecord.LocalTimestamp.ToString("yyyy-MM-dd HH:mm:ss");
 
             string catLocalized = GetLocalizedCategoryName(_currentRecord.Category);
             _lblCategoryVal.Text = catLocalized;
-            _lblResultVal.Text = !string.IsNullOrEmpty(_currentRecord.ResultBadge) ? _currentRecord.ResultBadge : "-";
+            _lblResultVal.Text = !string.IsNullOrEmpty(locBadge) ? locBadge : "-";
 
-            _lblContextVal.Text = !string.IsNullOrEmpty(_currentRecord.Context) ? _currentRecord.Context : "-";
-            _lblActionDescVal.Text = _currentRecord.Title ?? "-";
+            _lblContextVal.Text = !string.IsNullOrEmpty(locContext) ? locContext : "-";
+            _lblActionDescVal.Text = !string.IsNullOrEmpty(locTitle) ? locTitle : "-";
 
             // Update Badges
             _drawerCategoryBadge.Variant = StatusBadgeVariant.Info;
             _drawerCategoryBadge.Text = catLocalized;
 
             _drawerResultBadge.Variant = ActivityRow.DetermineBadgeVariant(_currentRecord);
-            _drawerResultBadge.Text = !string.IsNullOrEmpty(_currentRecord.ResultBadge) ? _currentRecord.ResultBadge : "-";
+            _drawerResultBadge.Text = !string.IsNullOrEmpty(locBadge) ? locBadge : "-";
 
             // Update Technical Identifiers (strictly LTR Consolas)
-            _fieldTimestampIso.Value = _currentRecord.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff");
+            _fieldTimestampIso.Value = _currentRecord.TimestampIso;
             _fieldCategoryCode.Value = ((int)_currentRecord.Category).ToString() + " (" + _currentRecord.Category.ToString() + ")";
-            _fieldContextToken.Value = !string.IsNullOrEmpty(_currentRecord.Context) ? _currentRecord.Context : "N/A";
-            _fieldResultCode.Value = !string.IsNullOrEmpty(_currentRecord.ResultBadge) ? _currentRecord.ResultBadge : "N/A";
+            _fieldContextToken.Value = !string.IsNullOrEmpty(locContext) ? locContext : "N/A";
+            _fieldResultCode.Value = !string.IsNullOrEmpty(locBadge) ? locBadge : "N/A";
 
             if (_badgeRow != null)
             {

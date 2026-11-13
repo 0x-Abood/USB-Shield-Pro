@@ -986,7 +986,8 @@ namespace UsbShieldPro.Devices
 
             foreach (var dev in devices)
             {
-                if (dev.IsRemovableMedia || dev.PhysicalTransport == PhysicalBusType.Usb)
+                if (dev.PhysicalTransport == PhysicalBusType.Usb && dev.WindowsClass == StorageClass.DiskDrive &&
+                    dev.Category != DeviceCategory.InternalFixedDisk && dev.Category != DeviceCategory.CriticalSystemHardware)
                 {
                     string guardReason;
                     if (SystemDeviceSafetyGuard.ValidateDevice(dev, out guardReason) == SafetyValidationResult.Passed)

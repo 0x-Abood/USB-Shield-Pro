@@ -159,18 +159,24 @@ namespace UsbShieldPro.Core
                 device.PhysicalTransport == PhysicalBusType.Sata ||
                 device.PhysicalTransport == PhysicalBusType.Ata ||
                 device.PhysicalTransport == PhysicalBusType.Atapi ||
+                device.PhysicalTransport == PhysicalBusType.Scsi ||
                 device.PhysicalTransport == PhysicalBusType.Raid ||
-                device.PhysicalTransport == PhysicalBusType.IScsi)
+                device.PhysicalTransport == PhysicalBusType.Sas ||
+                device.PhysicalTransport == PhysicalBusType.IScsi ||
+                device.PhysicalTransport == PhysicalBusType.Spaces ||
+                device.PhysicalTransport == PhysicalBusType.Virtual ||
+                device.PhysicalTransport == PhysicalBusType.FileBackedVirtual ||
+                device.PhysicalTransport == PhysicalBusType.Scm ||
+                device.PhysicalTransport == PhysicalBusType.Ufs)
             {
                 reason = "Internal system bus (" + device.PhysicalTransport + ") is strictly protected.";
                 return SafetyValidationResult.RejectedInternalBus;
             }
 
-            // 4. Must be confirmed USB or WPD
-            if (device.PhysicalTransport != PhysicalBusType.Usb &&
-                device.WindowsClass != StorageClass.WindowsPortableDevice)
+            // 4. Must be confirmed USB bus transport
+            if (device.PhysicalTransport != PhysicalBusType.Usb)
             {
-                reason = "Non-USB transport (" + device.PhysicalTransport + ") rejected by fail-open policy.";
+                reason = "Non-USB transport (" + device.PhysicalTransport + ") rejected by safety guard.";
                 return SafetyValidationResult.RejectedAmbiguousTransport;
             }
 

@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/0x-Abood/USB-Shield-Pro/releases/tag/v2.1.0"><img src="https://img.shields.io/badge/Release-v2.1.0%20Gold-00b4d8.svg" alt="Release v2.1.0"></a>
+  <a href="https://github.com/0x-Abood/USB-Shield-Pro/releases/tag/v2.1.1"><img src="https://img.shields.io/badge/Release-v2.1.1-00b4d8.svg" alt="Release v2.1.1"></a>
   <a href="https://github.com/0x-Abood/USB-Shield-Pro/actions/workflows/ci.yml"><img src="https://github.com/0x-Abood/USB-Shield-Pro/actions/workflows/ci.yml/badge.svg" alt="Build & Test Harness"></a>
   <img src="https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011%20x64-0077b6.svg" alt="Platform: Windows 10 / 11">
   <img src="https://img.shields.io/badge/Runtime-.NET%20Framework%204.8-2b9348.svg" alt="Runtime: .NET 4.8">
@@ -61,7 +61,7 @@ USB Shield Pro operates through two distinct, complementary enforcement models:
 - **Enterprise Policy Coexistence (Active Directory GPO / Microsoft Intune):** USB Shield Pro configures and manages Local Machine Policies (`HKLM`). In managed enterprise domains, centralized Domain Group Policies (GPO) or Microsoft Intune profiles configured to enforce conflicting storage policies may overwrite local registry settings during periodic background policy refresh cycles (`gpupdate /force`).
 - **Human Interface Devices (HID / BadUSB Injections):** Malicious hardware implants that present themselves as keyboard or mouse controllers (such as Rubber Ducky or BadUSB microcontrollers) load HID drivers rather than `USBSTOR` and are strictly outside the operational scope of storage controllers. Mitigating rogue HID devices requires physical USB port locks or bus-level device class filters.
 - **Hardware Identifier Spoofing:** Allowlisting is based on vendor-reported hardware descriptors (`VID`, `PID`, and serial number). Hardware microcontrollers specifically programmed to duplicate the exact descriptors and serial string of an enrolled drive cannot be distinguished at the user-mode bus query layer without hardware-level cryptographic attestation.
-- **Automated CI Test Harness Scope:** The automated CI test suite running on GitHub Actions (28 suites / 353 assertions) validates rules engine logic, atomic registry transaction safety, state journal rollback consistency, installer packaging, and Disk 0 safety invariants programmatically (Unit & Integration Logic). It does not emulate physical USB hardware bus signaling on virtualized cloud runner instances.
+- **Automated CI Test Harness Scope:** The automated CI test suite running on GitHub Actions (32 suites / 391 assertions) validates rules engine logic, atomic registry transaction safety, state journal rollback consistency, installer packaging, and Disk 0 safety invariants programmatically (Unit & Integration Logic). It does not emulate physical USB hardware bus signaling on virtualized cloud runner instances.
 
 ---
 
@@ -145,6 +145,7 @@ Empirical behavior observed and verified across standard Windows 10 (v1903+) and
 | Hardware Category | Mode A Behavior (System Lockdown) | Mode B Behavior (Reactive Allowlist) | Fail-Safe & Driver Semantics |
 | :--- | :--- | :--- | :--- |
 | **Internal NVMe Boot Drive**<br>*(Disk 0 / Host OS `C:`)* | **Bypassed / Immune**<br>System drive remains fully active and unrestricted. | **Bypassed / Immune**<br>Permanent kernel floor bypass; protected from locking or dismounting. | Hard-coded `SystemDeviceSafetyGuard` invariant prevents accidental locking or ejection. |
+| **Internal SATA / AHCI / RAID Fixed Disk**<br>*(Non-OS internal secondary storage)* | **Bypassed / Immune**<br>Internal storage bus and disks remain fully accessible. | **Bypassed / Immune**<br>Positive USB-bus evidence invariant strictly protects internal drives from ejection. | Hardware bus query verifies non-USB ancestry (`PositiveUsbEvidenceInvariant`). |
 | **Standard USB 2.0 / 3.0 Flash Drive**<br>*(Standard `USBSTOR`)* | **Fully Blocked**<br>Driver enumeration stopped (`Start = 4`) or blocked via `Deny_All`. | **Enforced via Allowlist**<br>Allowlisted drives remain mounted; unapproved drives instantly ejected. | Evaluated via `VID`/`PID`/`Serial` within the sub-second PnP arrival window. |
 | **Multi-Partition Bootable USB**<br>*(e.g., Ventoy EFI + ExFAT data)* | **Fully Blocked**<br>All partitions blocked from loading at the bus/policy layer. | **Enforced via Allowlist**<br>All sibling partitions (e.g., `D:`, `F:`) sequentially locked and unmounted in parallel. | Prevents `PNP_VetoDevice` errors through synchronized multi-volume dismounting. |
 | **External USB 3.x / NVMe UASP Enclosure**<br>*(Fixed-Disk Reporting)* | **Bypasses Start=4 / Deny_All**<br>Bypasses standalone USBSTOR and removable media policy if reported as fixed. | **Enforced via Allowlist**<br>Captured by `UsbShieldService` via PnP devnode discovery and reactively dismounted/ejected. | Governed through service-level devnode teardown rather than passive group policy. |
@@ -156,9 +157,9 @@ Empirical behavior observed and verified across standard Windows 10 (v1903+) and
 
 | Package | Format | Size | Download Link | Integrity & Antivirus |
 | :--- | :--- | :--- | :--- | :--- |
-| **Native Installer** | `.exe` | `1,253,376 bytes` | [Download Setup.exe](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1.0-Setup.exe) | [VirusTotal Clean (0/72)](https://www.virustotal.com/gui/file/8d675c4ca6b26d8e29f9ebb2f9b4431df7d347e2c476b6c090dad84b6619872d) |
-| **Portable Archive** | `.zip` | `387,108 bytes` | [Download Portable.zip](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1.0-Portable.zip) | [VirusTotal Clean (0/72)](https://www.virustotal.com/gui/file/8d991350abce42915e8c0b87f49017a4a347a9212592af778090eb7c89a29f6b) |
-| **SHA-256 Manifest** | `.txt` | `2,811 bytes` | [Download Checksums](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.0/USB-Shield-Pro-v2.1-SHA256.txt) | Verified via PowerShell `Get-FileHash` |
+| **Native Installer** | `.exe` | `1,311,744 bytes` | [Download Setup.exe](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.1/USB-Shield-Pro-v2.1.1-Setup.exe) | Verified SHA-256 Manifest |
+| **Portable Archive** | `.zip` | `403,139 bytes` | [Download Portable.zip](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.1/USB-Shield-Pro-v2.1.1-Portable.zip) | Verified SHA-256 Manifest |
+| **SHA-256 Manifest** | `.txt` | `817 bytes` | [Download Checksums](https://github.com/0x-Abood/USB-Shield-Pro/releases/download/v2.1.1/USB-Shield-Pro-v2.1.1-SHA256.txt) | Verified via PowerShell `Get-FileHash` |
 
 ---
 
@@ -179,6 +180,9 @@ UsbShieldPro.exe --restore-defaults
 
 :: Exact restoration from write-ahead state journal
 UsbShieldPro.exe --restore-exact
+
+:: Authenticated secure uninstallation with policy rollback
+UsbShieldPro.exe --uninstall
 ```
 
 ---
@@ -192,7 +196,7 @@ USB Shield Pro includes a passive, non-intrusive update notification engine desi
 - **Strict Domain Whitelist:** External links strictly validate the target destination against `https://github.com/0x-Abood/USB-Shield-Pro/` before opening the system's default browser.
 - **Strict Service Network Isolation:** The background Windows Service daemon (`UsbShieldService` / `--service`) is 100% network-isolated and never initiates any network sockets.
 - **Air-Gapped Workstations & Throttling:** Automatic checks occur at most once every 12 hours after a 2.5-second non-blocking startup window. Administrators of air-gapped networks can permanently disable all update queries under **Settings &rarr; Application Behavior &rarr; Check for updates automatically**.
-- **In-Place Upgrade Fidelity:** Upgrading via `USB-Shield-Pro-v2.1.0-Setup.exe` or replacing the standalone binary preserves all protection configurations, trusted device enrollments, and pre-Shield recovery baselines under `%ProgramData%\USBShieldPro` with 100% backward compatibility.
+- **In-Place Upgrade Fidelity:** Upgrading via `USB-Shield-Pro-v2.1.1-Setup.exe` or replacing the standalone binary preserves all protection configurations, trusted device enrollments, and pre-Shield recovery baselines under `%ProgramData%\USBShieldPro` with 100% backward compatibility.
 
 ---
 
@@ -200,13 +204,23 @@ USB Shield Pro includes a passive, non-intrusive update notification engine desi
 
 All production binaries are clean-room compiled (`/optimize+ /debug-`) without local machine paths, debug symbols, or external script dependencies.
 
+### v2.1.1 (Current Release)
+
+| File Name | Target Type | Size (Bytes) | Official SHA-256 Checksum |
+| :--- | :--- | :--- | :--- |
+| **`USB-Shield-Pro-v2.1.1-Setup.exe`** | Native Installer | `1,312,256` | `F0F47E5C3ECA7CA72549FE4890D8A095D2E07299072F5C1C6345AA3FBBBFA795` |
+| **`USB-Shield-Pro-v2.1.1-Portable.zip`** | Portable Archive | `400,432` | `C1B9854AD498AC2CD1414C03C597527ABAE7A447DC0167737F23163A43AB2732` |
+| **`UsbShieldPro.exe`** | Standalone Executable | `1,107,968` | `781A0F63E5529691E0D94D8663DC7E081C37D7B28383674DF6C99E74097E6C87` |
+| **`UsbShieldPro.exe.config`** | High-DPI Manifest | `598` | `53840DABDB7510AC21965024AEC4797025C920C965D29BBAA46FFA324338C5B1` |
+| **`README.txt`** | Release Notes | `7,007` | `21E5B2F4E286BCC1E49B4F7529DA4ACDD352A21628F368501B8CD9F17021B6E3` |
+
+### v2.1.0 (Previous Gold Release)
+
 | File Name | Target Type | Size (Bytes) | Official SHA-256 Checksum |
 | :--- | :--- | :--- | :--- |
 | **`USB-Shield-Pro-v2.1.0-Setup.exe`** | Native Installer | `1,253,376` | `8D675C4CA6B26D8E29F9EBB2F9B4431DF7D347E2C476B6C090DAD84B6619872D` |
 | **`USB-Shield-Pro-v2.1.0-Portable.zip`** | Portable Archive | `387,108` | `8D991350ABCE42915E8C0B87F49017A4A347A9212592AF778090EB7C89A29F6B` |
 | **`UsbShieldPro.exe`** | Standalone Executable | `1,076,736` | `C0EDC176CCAD5CB490933F8FCE8D94141D67E31B49E6A80DCAF88E772ACE8311` |
-| **`UsbShieldPro.exe.config`** | High-DPI Manifest | `598` | `53840DABDB7510AC21965024AEC4797025C920C965D29BBAA46FFA324338C5B1` |
-| **`README.txt`** | Release Notes | `6,998` | `3B72B744C64DF260E54BBC5AE5B0888C9F742C320DB3C62C9D26D5CBC1DAEA4F` |
 
 ### Integrity Verification (PowerShell)
 
@@ -217,10 +231,10 @@ Verify the integrity of downloaded binaries directly using PowerShell's built-in
 
 ```powershell
 # Verify the Native Installer
-Get-FileHash .\release\USB-Shield-Pro-v2.1.0-Setup.exe -Algorithm SHA256
+Get-FileHash .\USB-Shield-Pro-v2.1.1-Setup.exe -Algorithm SHA256
 
 # Verify the Portable Archive
-Get-FileHash .\release\USB-Shield-Pro-v2.1.0-Portable.zip -Algorithm SHA256
+Get-FileHash .\USB-Shield-Pro-v2.1.1-Portable.zip -Algorithm SHA256
 ```
 
 ---
@@ -245,7 +259,7 @@ Get-FileHash .\release\USB-Shield-Pro-v2.1.0-Portable.zip -Algorithm SHA256
    ```cmd
    Installer\build_installer.bat
    ```
-4. Run the regression test suite (28 Suites, 353 Assertions):
+4. Run the regression test suite (32 Suites, 391 Assertions):
    ```cmd
    TestRunner.exe --test-harness
    ```
