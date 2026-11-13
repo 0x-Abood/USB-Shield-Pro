@@ -4647,28 +4647,37 @@ namespace UsbShieldPro
 
         private void OnDeviceEnforcementPending(object sender, DeviceInterceptEventArgs e)
         {
-            string name = e.Device != null ? e.Device.FriendlyName : "USB Storage";
             string text = Loc.Get("SafeEjectPreparing");
-            string activityText = string.Format("{0}: {1}", name, text);
-            LogActivity(activityText, ActivityCategory.DeviceEvents, Loc.Get("BadgeReactiveAutoEject"), Theme.AccentOrange);
 
             if (_tray != null)
                 _tray.ShowBalloon(Loc.Get("AppTitle"), text);
+
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(RefreshActivityView));
+            }
+            else
+            {
+                RefreshActivityView();
+            }
         }
 
         private void OnDeviceIntercepted(object sender, DeviceInterceptEventArgs e)
         {
-            string name = e.Device != null ? e.Device.FriendlyName : "USB Storage";
             string formatKey = (e != null && e.EjectSuccess) ? "SafeEjectSuccessStatus" : "SafeEjectFailedStatus";
             string text = Loc.Get(formatKey);
 
-            string activityText = FormatActivityLogMessage(string.Format("{0}: {1}", name, text), e != null ? e.Message : null, e != null && e.EjectSuccess);
-            LogActivity(activityText, (e != null && e.EjectSuccess) ? ActivityCategory.DeviceEvents : ActivityCategory.Errors,
-                        (e != null && e.EjectSuccess) ? Loc.Get("BadgeSuccess") : Loc.Get("BadgeFailed"),
-                        (e != null && e.EjectSuccess) ? Theme.AccentGreen : Theme.AccentRed);
-
             if (_tray != null)
                 _tray.ShowBalloon(Loc.Get("AppTitle"), text);
+
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(RefreshActivityView));
+            }
+            else
+            {
+                RefreshActivityView();
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════════

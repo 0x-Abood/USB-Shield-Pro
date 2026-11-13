@@ -484,6 +484,25 @@ namespace UsbShieldPro.Devices
                 DeviceLifecycleRecord lifecycleRec;
                 DeviceEnforcementLifecycleManager.RegisterDevicePresence(dev, out lifecycleRec, out isNewArrival);
 
+                // Emit persistent DeviceDetected event upon initial positive identification, BEFORE policy evaluation or reactive ejection
+                if (lifecycleRec != null && !lifecycleRec.DetectionLogged)
+                {
+                    lifecycleRec.DetectionLogged = true;
+                    try
+                    {
+                        string devName = !string.IsNullOrEmpty(dev.FriendlyName) ? dev.FriendlyName : "USB Storage";
+                        string detectText = string.Format(Loc.Get("EventDeviceDetected"), devName);
+                        ActivityRepository.AppendRecord(new ActivityRecord(
+                            DateTime.Now,
+                            detectText,
+                            ActivityCategory.DeviceEvents,
+                            Loc.Get("BadgeDetected"),
+                            Theme.AccentBlue,
+                            dev.DeviceInstanceId ?? dev.SerialNumber ?? devName));
+                    }
+                    catch { }
+                }
+
                 // Check if device is already suppressed (e.g. EjectedUntilRemoval, Evaluating, etc.)
                 string suppressReason;
                 if (DeviceEnforcementLifecycleManager.ShouldSuppressEnforcement(dev, currentPolicy, out suppressReason))
@@ -881,6 +900,21 @@ namespace UsbShieldPro.Devices
                                 {
                                     break; // Stale cycle or cancelled
                                 }
+
+                                try
+                                {
+                                    string prepName = (dev != null && !string.IsNullOrEmpty(dev.FriendlyName)) ? dev.FriendlyName : "USB Storage";
+                                    string prepStatus = Loc.Get("SafeEjectPreparing");
+                                    string prepText = string.Format("{0}: {1}", prepName, prepStatus);
+                                    ActivityRepository.AppendRecord(new ActivityRecord(
+                                        DateTime.Now,
+                                        prepText,
+                                        ActivityCategory.DeviceEvents,
+                                        Loc.Get("BadgeReactiveAutoEject"),
+                                        Theme.AccentOrange,
+                                        dev.DeviceInstanceId ?? dev.SerialNumber ?? prepName));
+                                }
+                                catch { }
 
                                 if (DeviceEnforcementPending != null)
                                 {

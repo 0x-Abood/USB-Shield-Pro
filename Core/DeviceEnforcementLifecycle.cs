@@ -59,6 +59,7 @@ namespace UsbShieldPro.Core
 
         public string FriendlyName { get; set; }
         public bool ArrivalLogged { get; set; }
+        public bool DetectionLogged { get; set; }
         public EnforcementState PriorStateBeforeRemoval { get; set; }
     }
 
@@ -647,6 +648,7 @@ namespace UsbShieldPro.Core
                         rec.AttemptCount = 0;
                         rec.NotificationEmitted = false;
                         rec.ArrivalLogged = false;
+                        rec.DetectionLogged = false;
                         rec.HadUsableMediaBeforeAttempt = (dev.VolumeMountings != null && dev.VolumeMountings.Count > 0) || dev.TotalSizeBytes > 0;
                         rec.FirstObservedTicks = Stopwatch.GetTimestamp();
                         rec.LastUpdatedTicks = rec.FirstObservedTicks;
@@ -688,6 +690,7 @@ namespace UsbShieldPro.Core
                     AttemptCount = 0,
                     NotificationEmitted = false,
                     ArrivalLogged = false,
+                    DetectionLogged = false,
                     FriendlyName = dev.FriendlyName,
                     FirstObservedTicks = Stopwatch.GetTimestamp(),
                     LastUpdatedTicks = Stopwatch.GetTimestamp()
@@ -768,6 +771,7 @@ namespace UsbShieldPro.Core
                         rec.State = EnforcementState.Evaluating;
                         rec.AttemptCount = 0;
                         rec.NotificationEmitted = false;
+                        rec.DetectionLogged = false;
                         rec.HadUsableMediaBeforeAttempt = hasUsableMedia;
                         rec.FirstObservedTicks = Stopwatch.GetTimestamp();
                         rec.LastUpdatedTicks = rec.FirstObservedTicks;
@@ -827,6 +831,7 @@ namespace UsbShieldPro.Core
                     State = EnforcementState.Evaluating,
                     AttemptCount = 0,
                     NotificationEmitted = false,
+                    DetectionLogged = false,
                     FirstObservedTicks = Stopwatch.GetTimestamp(),
                     LastUpdatedTicks = Stopwatch.GetTimestamp()
                 };
@@ -1023,6 +1028,7 @@ namespace UsbShieldPro.Core
                     if (rec.GenerationId == generationId)
                     {
                         rec.State = EnforcementState.Removed;
+                        rec.DetectionLogged = false;
                         rec.LastUpdatedTicks = Stopwatch.GetTimestamp();
                         ctsToCancel = rec.ActiveCts;
                     }
@@ -1172,6 +1178,7 @@ namespace UsbShieldPro.Core
                             {
                                 rec.PriorStateBeforeRemoval = rec.State;
                                 rec.State = EnforcementState.Removed;
+                                rec.DetectionLogged = false;
                                 if (rec.ActiveCts != null)
                                 {
                                     try { rec.ActiveCts.Cancel(); } catch { }

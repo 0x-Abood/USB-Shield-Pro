@@ -668,7 +668,7 @@ namespace UsbShieldPro.Service
                     ActivityCategory.DeviceEvents,
                     Loc.Get("BadgeReactiveAutoEject"),
                     Theme.AccentOrange,
-                    name));
+                    (e != null && !string.IsNullOrEmpty(e.Message)) ? e.Message : name));
             }
             catch { }
         }

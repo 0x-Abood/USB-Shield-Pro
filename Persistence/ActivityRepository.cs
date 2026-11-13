@@ -265,13 +265,13 @@ namespace UsbShieldPro.Persistence
                 ResetCache();
                 List<ActivityRecord> current = Load();
 
-                // Deduplication check: Suppress duplicate event if title and context match an event logged within 1.5 seconds
+                // Deduplication check: Suppress duplicate event if title and badge match the latest event logged within 1.5 seconds
                 if (current.Count > 0)
                 {
                     ActivityRecord latest = current[0];
                     if (string.Equals(latest.Title, record.Title, StringComparison.OrdinalIgnoreCase) &&
-                        string.Equals(latest.Context, record.Context, StringComparison.OrdinalIgnoreCase) &&
-                        Math.Abs((record.Timestamp - latest.Timestamp).TotalSeconds) < 1.5)
+                        string.Equals(latest.ResultBadge, record.ResultBadge, StringComparison.OrdinalIgnoreCase) &&
+                        Math.Abs((record.Timestamp.ToUniversalTime() - latest.Timestamp.ToUniversalTime()).TotalSeconds) < 1.5)
                     {
                         return true; // Cleanly suppressed duplicate
                     }
@@ -321,8 +321,8 @@ namespace UsbShieldPro.Persistence
                     {
                         ActivityRecord latest = current[0];
                         if (string.Equals(latest.Title, rec.Title, StringComparison.OrdinalIgnoreCase) &&
-                            string.Equals(latest.Context, rec.Context, StringComparison.OrdinalIgnoreCase) &&
-                            Math.Abs((rec.Timestamp - latest.Timestamp).TotalSeconds) < 1.5)
+                            string.Equals(latest.ResultBadge, rec.ResultBadge, StringComparison.OrdinalIgnoreCase) &&
+                            Math.Abs((rec.Timestamp.ToUniversalTime() - latest.Timestamp.ToUniversalTime()).TotalSeconds) < 1.5)
                         {
                             continue;
                         }

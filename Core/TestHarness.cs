@@ -5270,35 +5270,48 @@ namespace UsbShieldPro.Core
             ActiveSentinel.ResetSeams();
             DeviceEnforcementLifecycleManager.EnableTestMode();
 
-            var testPolicy9BS = new ProtectionPolicy { WhitelistMode = true };
-            LatencyTracker.ResetPnpArrivalNotification();
-            LatencyTracker.RecordPnpArrivalNotification();
-
-            var delays9BS = new List<int>();
-            ActiveSentinel.ReconciliationScheduleSeam = new int[] { 100, 250, 500, 1000 };
-            ActiveSentinel.ReconciliationDelaySeam = ms => delays9BS.Add(ms);
-            DeviceDiscovery.RawDiskCandidatesSeam = () => new List<DeviceIdentity>(); // Device never mounts
-
-            bool started9BS = ActiveSentinel.StartArrivalReconciliation(testPolicy9BS, false);
-            bool completed9BS = ActiveSentinel.LastReconciliationTask != null &&
-                                ActiveSentinel.LastReconciliationTask.Wait(3000);
-            bool workerResult9BS = completed9BS && !ActiveSentinel.LastReconciliationTask.Result;
-            bool activeAfterExhaustion = ActiveSentinel.IsReconciliationActive;
-
-            bool scheduleMatched = (delays9BS.Count == 4 &&
-                                    delays9BS[0] == 100 && delays9BS[1] == 250 &&
-                                    delays9BS[2] == 500 && delays9BS[3] == 1000);
-
-            bool ok9BS = started9BS && completed9BS && workerResult9BS && !activeAfterExhaustion && scheduleMatched;
-            if (!ok9BS)
+            var prevOwner9BS = EnforcementOwnerResolver.ResolveOwnerOverride;
+            var prevRunning9BS = ServiceManager.IsServiceRunningOverride;
+            try
             {
-                failures.Add(string.Format("Test 9BS Failed: started={0}, completed={1}, workerResult={2}, activeAfter={3}, schedMatched={4} (delays=[{5}])",
-                    started9BS, completed9BS, workerResult9BS, activeAfterExhaustion, scheduleMatched, string.Join(",", delays9BS.ConvertAll(i => i.ToString()).ToArray())));
-                log("  FAILED: Reconciliation loop did not exhaust schedule cleanly or remained active.");
+                EnforcementOwnerResolver.ResolveOwnerOverride = _ => EnforcementOwnerState.GuiFallback;
+                ServiceManager.IsServiceRunningOverride = () => false;
+
+                var testPolicy9BS = new ProtectionPolicy { WhitelistMode = true };
+                LatencyTracker.ResetPnpArrivalNotification();
+                LatencyTracker.RecordPnpArrivalNotification();
+
+                var delays9BS = new List<int>();
+                ActiveSentinel.ReconciliationScheduleSeam = new int[] { 100, 250, 500, 1000 };
+                ActiveSentinel.ReconciliationDelaySeam = ms => delays9BS.Add(ms);
+                DeviceDiscovery.RawDiskCandidatesSeam = () => new List<DeviceIdentity>(); // Device never mounts
+
+                bool started9BS = ActiveSentinel.StartArrivalReconciliation(testPolicy9BS, false);
+                bool completed9BS = ActiveSentinel.LastReconciliationTask != null &&
+                                    ActiveSentinel.LastReconciliationTask.Wait(3000);
+                bool workerResult9BS = completed9BS && !ActiveSentinel.LastReconciliationTask.Result;
+                bool activeAfterExhaustion = ActiveSentinel.IsReconciliationActive;
+
+                bool scheduleMatched = (delays9BS.Count == 4 &&
+                                        delays9BS[0] == 100 && delays9BS[1] == 250 &&
+                                        delays9BS[2] == 500 && delays9BS[3] == 1000);
+
+                bool ok9BS = started9BS && completed9BS && workerResult9BS && !activeAfterExhaustion && scheduleMatched;
+                if (!ok9BS)
+                {
+                    failures.Add(string.Format("Test 9BS Failed: started={0}, completed={1}, workerResult={2}, activeAfter={3}, schedMatched={4} (delays=[{5}])",
+                        started9BS, completed9BS, workerResult9BS, activeAfterExhaustion, scheduleMatched, string.Join(",", delays9BS.ConvertAll(i => i.ToString()).ToArray())));
+                    log("  FAILED: Reconciliation loop did not exhaust schedule cleanly or remained active.");
+                }
+                else
+                {
+                    log("  PASSED: Reconciliation window exhausted bounded schedule (+100 ms, +250 ms, +500 ms, +1000 ms) and terminated cleanly without endless spinning.");
+                }
             }
-            else
+            finally
             {
-                log("  PASSED: Reconciliation window exhausted bounded schedule (+100 ms, +250 ms, +500 ms, +1000 ms) and terminated cleanly without endless spinning.");
+                EnforcementOwnerResolver.ResolveOwnerOverride = prevOwner9BS;
+                ServiceManager.IsServiceRunningOverride = prevRunning9BS;
             }
 
             // ── TEST 9BT: Telemetry Fix A — Clean Dismount Success Display ──
@@ -11061,8 +11074,19 @@ namespace UsbShieldPro.Core
             bool origCap = MainForm.IsCaptureMode;
             MainForm.IsCaptureMode = true;
 
+            string origDir14 = SecurityAclHelper.BaseDirectoryOverride;
+            string testDir14 = Path.Combine(Path.GetTempPath(), "USBShieldPro_Test14_" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            Directory.CreateDirectory(testDir14);
+            SecurityAclHelper.BaseDirectoryOverride = testDir14;
+            SettingsRepository.ResetCache();
+
+            DeviceEnforcementLifecycleManager.EnableTestMode();
+            var prevOwner14 = EnforcementOwnerResolver.ResolveOwnerOverride;
+            var prevRunning14 = ServiceManager.IsServiceRunningOverride;
             try
             {
+                EnforcementOwnerResolver.ResolveOwnerOverride = _ => EnforcementOwnerState.GuiFallback;
+                ServiceManager.IsServiceRunningOverride = () => false;
                 DpiManager.CurrentDpiScale = 1.0f;
                 DpiManager.ClearFontCache();
                 ThemeManager.SetTheme(AppTheme.CharcoalRed, persist: false);
@@ -11306,6 +11330,12 @@ namespace UsbShieldPro.Core
             }
             finally
             {
+                DeviceEnforcementLifecycleManager.DisableTestMode();
+                SecurityAclHelper.BaseDirectoryOverride = origDir14;
+                SettingsRepository.ResetCache();
+                try { Directory.Delete(testDir14, true); } catch { }
+                EnforcementOwnerResolver.ResolveOwnerOverride = prevOwner14;
+                ServiceManager.IsServiceRunningOverride = prevRunning14;
                 MainForm.IsCaptureMode = origCap;
                 DpiManager.CurrentDpiScale = origDpi;
                 DpiManager.ClearFontCache();
@@ -16134,25 +16164,34 @@ namespace UsbShieldPro.Core
 
                 // ── TEST 24C: ServiceManager Fallback when Service Not Running ──
                 log("[Test 24C] ServiceManager Graceful Fallback when Service Is Not Running...");
-                string fallbackErr;
-                bool serviceAck;
-                bool fallbackOk = ServiceManager.TrySynchronizePolicy(validPolicy, out fallbackErr, out serviceAck);
-
-                string nullErr;
-                bool nullServiceAck;
-                bool nullPolicyOk = ServiceManager.TrySynchronizePolicy(null, out nullErr, out nullServiceAck);
-
-                bool pass24C = fallbackOk && !serviceAck && string.IsNullOrEmpty(fallbackErr) &&
-                               !nullPolicyOk && !nullServiceAck && !string.IsNullOrEmpty(nullErr);
-
-                if (!pass24C)
+                var prevRunning24C = ServiceManager.IsServiceRunningOverride;
+                try
                 {
-                    failures.Add(string.Format("Test 24C Failed: fallbackOk={0}, serviceAck={1}, nullPolicyOk={2}", fallbackOk, serviceAck, nullPolicyOk));
-                    log("  FAILED: ServiceManager fallback semantics failed when service is not running.");
+                    ServiceManager.IsServiceRunningOverride = () => false;
+                    string fallbackErr;
+                    bool serviceAck;
+                    bool fallbackOk = ServiceManager.TrySynchronizePolicy(validPolicy, out fallbackErr, out serviceAck);
+
+                    string nullErr;
+                    bool nullServiceAck;
+                    bool nullPolicyOk = ServiceManager.TrySynchronizePolicy(null, out nullErr, out nullServiceAck);
+
+                    bool pass24C = fallbackOk && !serviceAck && string.IsNullOrEmpty(fallbackErr) &&
+                                   !nullPolicyOk && !nullServiceAck && !string.IsNullOrEmpty(nullErr);
+
+                    if (!pass24C)
+                    {
+                        failures.Add(string.Format("Test 24C Failed: fallbackOk={0}, serviceAck={1}, nullPolicyOk={2}", fallbackOk, serviceAck, nullPolicyOk));
+                        log("  FAILED: ServiceManager fallback semantics failed when service is not running.");
+                    }
+                    else
+                    {
+                        log("  PASSED: ServiceManager gracefully falls back to local authoritative owner when service is not running, and rejects null policies.");
+                    }
                 }
-                else
+                finally
                 {
-                    log("  PASSED: ServiceManager gracefully falls back to local authoritative owner when service is not running, and rejects null policies.");
+                    ServiceManager.IsServiceRunningOverride = prevRunning24C;
                 }
 
                 // ── TEST 24D: Quick Lock & Unlock Policy Semantics and Preservation ──
@@ -21038,19 +21077,20 @@ namespace UsbShieldPro.Core
                         ActiveSentinel.EvaluateAndEnforceConnectedDevices(policyDisabled, false);
 
                         List<ActivityRecord> recs37A = ActivityRepository.Load();
-                        bool pass37A = recs37A != null && recs37A.Count == 1 &&
+                        bool pass37A = recs37A != null && recs37A.Count == 2 &&
                                        recs37A[0].Title.Contains("Kingston DataTraveler") &&
-                                       recs37A[0].ResultBadge == Loc.Get("BadgeConnected");
+                                       recs37A[0].ResultBadge == Loc.Get("BadgeConnected") &&
+                                       recs37A[1].ResultBadge == Loc.Get("BadgeDetected");
 
                         if (!pass37A)
                         {
-                            failures.Add(string.Format("Test 37A Failed: Connection while disabled not recorded. count={0}",
+                            failures.Add(string.Format("Test 37A Failed: Connection while disabled not recorded accurately. count={0}",
                                 recs37A != null ? recs37A.Count : -1));
                             log("  FAILED: Arrival with protection disabled was not logged to ActivityRepository.");
                         }
                         else
                         {
-                            log("  PASSED: Device arrival while protection is disabled successfully recorded with BadgeConnected.");
+                            log("  PASSED: Device arrival while protection is disabled successfully recorded both BadgeDetected and BadgeConnected.");
                         }
 
                         // ── TEST 37B: Device Removal Recording ──
@@ -21059,7 +21099,7 @@ namespace UsbShieldPro.Core
                         ActiveSentinel.EvaluateAndEnforceConnectedDevices(policyDisabled, false);
 
                         List<ActivityRecord> recs37B = ActivityRepository.Load();
-                        bool pass37B = recs37B != null && recs37B.Count == 2 &&
+                        bool pass37B = recs37B != null && recs37B.Count == 3 &&
                                        recs37B[0].Title.Contains("Kingston DataTraveler") &&
                                        recs37B[0].ResultBadge == Loc.Get("BadgeDisconnected");
 
@@ -21111,9 +21151,10 @@ namespace UsbShieldPro.Core
                         ActiveSentinel.EvaluateAndEnforceConnectedDevices(policyActive, false);
 
                         List<ActivityRecord> recs37C = ActivityRepository.Load();
-                        bool pass37C = recs37C != null && recs37C.Count == 1 &&
+                        bool pass37C = recs37C != null && recs37C.Count == 2 &&
                                        recs37C[0].Title.Contains(Loc.Get("SafeEjectSuccessStatus")) &&
-                                       recs37C[0].ResultBadge == Loc.Get("BadgeSuccess");
+                                       recs37C[0].ResultBadge == Loc.Get("BadgeSuccess") &&
+                                       recs37C[1].ResultBadge == Loc.Get("BadgeDetected");
 
                         if (!pass37C)
                         {
@@ -21123,7 +21164,7 @@ namespace UsbShieldPro.Core
                         }
                         else
                         {
-                            log("  PASSED: Unknown device reactive auto-ejection successfully recorded with SafeEjectSuccessStatus.");
+                            log("  PASSED: Unknown device reactive auto-ejection successfully recorded with BadgeDetected followed by SafeEjectSuccessStatus.");
                         }
 
                         // ── TEST 37D: Disconnect and Reconnect Same Device (Generation Re-Enforcement) ──
@@ -21133,7 +21174,7 @@ namespace UsbShieldPro.Core
                         ActiveSentinel.EvaluateAndEnforceConnectedDevices(policyActive, false);
 
                         List<ActivityRecord> recs37D1 = ActivityRepository.Load();
-                        bool unpluggedRecorded = recs37D1 != null && recs37D1.Count == 2 &&
+                        bool unpluggedRecorded = recs37D1 != null && recs37D1.Count == 3 &&
                                                  recs37D1[0].ResultBadge == Loc.Get("BadgeRemoved");
 
                         // 2. Re-plug the exact same device (new physical arrival generation)
@@ -21141,9 +21182,10 @@ namespace UsbShieldPro.Core
                         ActiveSentinel.EvaluateAndEnforceConnectedDevices(policyActive, false);
 
                         List<ActivityRecord> recs37D2 = ActivityRepository.Load();
-                        bool reEnforcedRecorded = recs37D2 != null && recs37D2.Count == 3 &&
+                        bool reEnforcedRecorded = recs37D2 != null && recs37D2.Count == 5 &&
                                                   recs37D2[0].ResultBadge == Loc.Get("BadgeSuccess") &&
-                                                  recs37D2[0].Title.Contains(Loc.Get("SafeEjectSuccessStatus"));
+                                                  recs37D2[0].Title.Contains(Loc.Get("SafeEjectSuccessStatus")) &&
+                                                  recs37D2[1].ResultBadge == Loc.Get("BadgeDetected");
 
                         bool pass37D = unpluggedRecorded && reEnforcedRecorded;
                         if (!pass37D)
@@ -21183,9 +21225,10 @@ namespace UsbShieldPro.Core
                         ActiveSentinel.EvaluateAndEnforceConnectedDevices(policyActive, false);
 
                         List<ActivityRecord> recs37E = ActivityRepository.Load();
-                        bool pass37E = recs37E != null && recs37E.Count == 1 &&
+                        bool pass37E = recs37E != null && recs37E.Count == 2 &&
                                        recs37E[0].Title.Contains("Samsung BAR Plus") &&
-                                       recs37E[0].ResultBadge == Loc.Get("BadgeVerified");
+                                       recs37E[0].ResultBadge == Loc.Get("BadgeVerified") &&
+                                       recs37E[1].ResultBadge == Loc.Get("BadgeDetected");
 
                         if (!pass37E)
                         {
@@ -21195,7 +21238,7 @@ namespace UsbShieldPro.Core
                         }
                         else
                         {
-                            log("  PASSED: Trusted device arrival successfully recognized and logged with BadgeVerified.");
+                            log("  PASSED: Trusted device arrival successfully recognized and logged with BadgeDetected followed by BadgeVerified.");
                         }
 
                         // ── TEST 37F: Auto-Eject Failure Recording ──
@@ -21225,10 +21268,11 @@ namespace UsbShieldPro.Core
                         ActiveSentinel.EvaluateAndEnforceConnectedDevices(policyActive, false);
 
                         List<ActivityRecord> recs37F = ActivityRepository.Load();
-                        bool pass37F = recs37F != null && recs37F.Count == 1 &&
+                        bool pass37F = recs37F != null && recs37F.Count == 2 &&
                                        recs37F[0].Category == ActivityCategory.Errors &&
                                        recs37F[0].ResultBadge == Loc.Get("BadgeFailed") &&
-                                       recs37F[0].Title.Contains(Loc.Get("SafeEjectFailedStatus"));
+                                       recs37F[0].Title.Contains(Loc.Get("SafeEjectFailedStatus")) &&
+                                       recs37F[1].ResultBadge == Loc.Get("BadgeDetected");
 
                         if (!pass37F)
                         {
@@ -21238,7 +21282,7 @@ namespace UsbShieldPro.Core
                         }
                         else
                         {
-                            log("  PASSED: Auto-eject failure cleanly captured as Error category with SafeEjectFailedStatus.");
+                            log("  PASSED: Auto-eject failure cleanly captured as Error category with BadgeDetected followed by SafeEjectFailedStatus.");
                         }
 
                         // ── TEST 37G: Headless Service Mode Event Persistence ──
@@ -21275,7 +21319,10 @@ namespace UsbShieldPro.Core
                         string diskFile = ActivityRepository.GetFilePath();
                         bool fileOnDisk = File.Exists(diskFile) && new FileInfo(diskFile).Length > 0;
 
-                        bool pass37G = recs37G != null && recs37G.Count == 1 && fileOnDisk;
+                        bool pass37G = recs37G != null && recs37G.Count == 2 &&
+                                       recs37G[0].ResultBadge == Loc.Get("BadgeSuccess") &&
+                                       recs37G[1].ResultBadge == Loc.Get("BadgeDetected") &&
+                                       fileOnDisk;
                         if (!pass37G)
                         {
                             failures.Add(string.Format("Test 37G Failed: Headless service event persistence failed. count={0}, fileExists={1}",
@@ -21395,17 +21442,88 @@ namespace UsbShieldPro.Core
                         ActiveSentinel.EvaluateAndEnforceConnectedDevices(policyActive, false);
 
                         List<ActivityRecord> recs37J = ActivityRepository.Load();
-                        bool pass37J = recs37J != null && recs37J.Count == 1;
+                        bool pass37J = recs37J != null && recs37J.Count == 2 &&
+                                       recs37J[0].ResultBadge == Loc.Get("BadgeSuccess") &&
+                                       recs37J[1].ResultBadge == Loc.Get("BadgeDetected");
 
                         if (!pass37J)
                         {
-                            failures.Add(string.Format("Test 37J Failed: Duplicate events emitted for multi-partition device. count={0}",
-                                recs37J != null ? recs37J.Count : -1));
-                            log("  FAILED: Multiple arrival events emitted for partitions on the same physical drive.");
+                            string items37J = recs37J != null ? string.Join("; ", recs37J.ConvertAll(r => r.Title + " (" + r.ResultBadge + ")").ToArray()) : "null";
+                            failures.Add(string.Format("Test 37J Failed: Multi-partition arrival/eject event count mismatch. count={0}, items=[{1}]",
+                                recs37J != null ? recs37J.Count : -1, items37J));
+                            log(string.Format("  FAILED: Partitions on same physical drive emitted unexpected records: [{0}]", items37J));
                         }
                         else
                         {
-                            log("  PASSED: Multi-partition device successfully deduplicated to exactly one arrival event for physical drive.");
+                            log("  PASSED: Multi-partition device successfully deduplicated to exactly one arrival event and one eject event for physical drive.");
+                        }
+
+                        // ── TEST 37K: Duplicate Producer Elimination & Event Sequence Invariant ──
+                        log("[Test 37K] Duplicate Producer Elimination & Event Sequence Invariant...");
+                        ActivityRepository.Clear(out clearErr);
+
+                        var dev37K = new DeviceIdentity
+                        {
+                            FriendlyName = "SanDisk Ultra Dual USB",
+                            DeviceInstanceId = @"USB\VID_0781&PID_5583\SER_37K",
+                            PhysicalUsbParentInstanceId = @"USB\VID_0781&PID_5583\SER_37K_PARENT",
+                            SerialNumber = "SER_37K",
+                            PhysicalDiskNumber = 7,
+                            PhysicalTransport = PhysicalBusType.Usb,
+                            WindowsClass = StorageClass.DiskDrive,
+                            VolumeMountings = new List<string> { "X:" },
+                            SafetyResult = SafetyValidationResult.Passed,
+                            IsRemovableMedia = true
+                        };
+
+                        bool isPresent37K = true;
+                        DeviceEnforcementLifecycleManager.PhysicalPresenceSeam = anchor => isPresent37K;
+                        DeviceDiscovery.RawDiskCandidatesSeam = () => isPresent37K ? new List<DeviceIdentity> { dev37K } : new List<DeviceIdentity>();
+                        DeviceEnforcementLifecycleManager.EjectExecutionSeam = (d, lat) => DeviceEjectResult.Success;
+
+                        // 1. Initial connection & reactive ejection
+                        ActiveSentinel.EvaluateAndEnforceConnectedDevices(policyActive, false);
+
+                        List<ActivityRecord> initial37K = ActivityRepository.Load();
+                        bool initialOk = (initial37K != null && initial37K.Count == 2 &&
+                                          initial37K[0].ResultBadge == Loc.Get("BadgeSuccess") &&
+                                          initial37K[1].ResultBadge == Loc.Get("BadgeDetected"));
+
+                        // 2. Simulate subsequent 1-second periodic sweeps while device is plugged in (should be suppressed)
+                        ActiveSentinel.EvaluateAndEnforceConnectedDevices(policyActive, false);
+                        ActiveSentinel.EvaluateAndEnforceConnectedDevices(policyActive, false);
+
+                        // 3. Simulate UsbShieldService interception handler invoked concurrently or via event
+                        UsbShieldService testService = new UsbShieldService();
+                        var interceptMethod = typeof(UsbShieldService).GetMethod("OnServiceDeviceIntercepted",
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        if (interceptMethod != null)
+                        {
+                            interceptMethod.Invoke(testService, new object[] {
+                                null,
+                                new DeviceInterceptEventArgs
+                                {
+                                    Device = dev37K,
+                                    EjectSuccess = true,
+                                    Message = "Device safely ejected via PnP."
+                                }
+                            });
+                        }
+
+                        // 4. Verify exactly 2 records remain (Zero duplicate ejects or arrivals)
+                        List<ActivityRecord> deduplicated37K = ActivityRepository.Load();
+                        bool pass37K = initialOk && (deduplicated37K != null && deduplicated37K.Count == 2);
+
+                        if (!pass37K)
+                        {
+                            string items37K = deduplicated37K != null ? string.Join("; ", deduplicated37K.ConvertAll(r => r.Title + " (" + r.ResultBadge + ")").ToArray()) : "null";
+                            failures.Add(string.Format("Test 37K Failed: Duplicate producer entries detected. initialOk={0}, finalCount={1}, items=[{2}]",
+                                initialOk, deduplicated37K != null ? deduplicated37K.Count : -1, items37K));
+                            log(string.Format("  FAILED: Unexpected duplicate records present: [{0}]", items37K));
+                        }
+                        else
+                        {
+                            log("  PASSED: Duplicate producer entries eliminated at source; exactly one detected and one eject event persisted.");
                         }
                     }
                     catch (Exception ex)
